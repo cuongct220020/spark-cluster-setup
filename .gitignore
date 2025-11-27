@@ -205,3 +205,19 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+
+# ZooKeeper data (if mounted locally)
+zk-data/
+zookeeper-*/
+
+# Spark logs (if mounted locally)
+spark-logs/

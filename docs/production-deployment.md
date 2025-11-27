@@ -1,0 +1,635 @@
+# Production Deployment Guide
+
+Hướng dẫn deploy Spark HA Cluster lên production environment.
+
+## 🎯 Architecture Overview
+
+### Recommended Setup
+
+```
+┌─────────────────── Production Cluster ───────────────────┐
+│                                                           │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │  Server 1    │  │  Server 2    │  │  Server 3    │  │
+│  ├──────────────┤  ├──────────────┤  ├──────────────┤  │
+│  │ ZooKeeper-1  │  │ ZooKeeper-2  │  │ ZooKeeper-3  │  │
+│  │ Spark Master │  │ Spark Master │  │ Spark Master │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+│                                                           │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │  Worker 1    │  │  Worker 2    │  │  Worker N    │  │
+│  ├──────────────┤  ├──────────────┤  ├──────────────┤  │
+│  │ Spark Worker │  │ Spark Worker │  │ Spark Worker │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+└───────────────────────────────────────────────────────────┘
+```
+
+### Hardware Requirements
+
+#### ZooKeeper + Spark Master Nodes (3 nodes)
+- **CPU**: 4-8 cores
+- **RAM**: 8-16 GB
+- **Disk**: 100 GB SSD (ZooKeeper cần low latency)
+- **Network**: 10 Gbps
+
+#### Spark Worker Nodes (N nodes)
+- **CPU**: 16-32 cores
+- **RAM**: 64-128 GB
+- **Disk**: 500 GB - 2 TB (tùy use case)
+- **Network**: 10 Gbps
+
+## 📋 Pre-deployment Checklist
+
+### 1. Infrastructure
+
+- [ ] Provisioned servers (physical hoặc VMs)
+- [ ] Static IP addresses assigned
+- [ ] DNS records configured
+- [ ] Firewall rules configured
+- [ ] SSH keys deployed
+- [ ] Docker installed on all nodes
+- [ ] NTP synchronized across all nodes
+
+### 2. Network
+
+- [ ] Low latency between ZooKeeper nodes (< 10ms)
+- [ ] All required ports opened
+- [ ] Load balancer configured (if needed)
+- [ ] VPN/Private network setup
+
+### 3. Security
+
+- [ ] SSL certificates prepared
+- [ ] Authentication credentials generated
+- [ ] Network segmentation configured
+- [ ] Backup strategy defined
+
+## 🔧 Step-by-Step Deployment
+
+### Step 1: Prepare Environment Files
+
+Create separate `.env` files for each environment:
+
+```bash
+# production.env
+IMAGE=apache/spark:3.5.0
+ZOOKEEPER_IMAGE=zookeeper:3.9
+
+# ZooKeeper Configuration
+ZK_HEAP_SIZE=2048
+ZK_TICK_TIME=2000
+ZK_INIT_LIMIT=10
+ZK_SYNC_LIMIT=5
+
+# Spark Configuration
+SPARK_WORKER_CORES=16
+SPARK_WORKER_MEMORY=32G
+SPARK_DAEMON_MEMORY=4G
+
+# Security
+SPARK_RPC_AUTHENTICATION_ENABLED=yes
+SPARK_RPC_AUTHENTICATION_SECRET=${SPARK_SECRET}
+SPARK_RPC_ENCRYPTION_ENABLED=yes
+
+# Monitoring
+SPARK_METRICS_ENABLED=true
+```
+
+### Step 2: Update Docker Compose for Production
+
+Create `docker-compose.prod.yml`:
+
+```yaml
+version: '3.8'
+
+networks:
+  spark-net:
+    driver: overlay
+    attachable: true
+
+volumes:
+  zk1-data:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=nfs-server,rw
+      device: ":/mnt/zk1-data"
+  zk1-log:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=nfs-server,rw
+      device: ":/mnt/zk1-log"
+
+services:
+  zookeeper-1:
+    image: ${ZOOKEEPER_IMAGE}
+    hostname: zk1.production.local
+    networks:
+      - spark-net
+    ports:
+      - "2181:2181"
+    environment:
+      ZOO_MY_ID: 1
+      ZOO_SERVERS: server.1=zk1.production.local:2888:3888;2181 server.2=zk2.production.local:2888:3888;2181 server.3=zk3.production.local:2888:3888;2181
+      ZOO_4LW_COMMANDS_WHITELIST: "*"
+      JVMFLAGS: "-Xms${ZK_HEAP_SIZE}m -Xmx${ZK_HEAP_SIZE}m"
+    volumes:
+      - zk1-data:/data
+      - zk1-log:/datalog
+    restart: always
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == server1
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
+
+  spark-master-1:
+    image: ${IMAGE}
+    hostname: spark-master-1.production.local
+    networks:
+      - spark-net
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+    environment:
+      - SPARK_MODE=master
+      - SPARK_MASTER_HOST=spark-master-1.production.local
+      - SPARK_DAEMON_MEMORY=${SPARK_DAEMON_MEMORY}
+      - SPARK_DAEMON_JAVA_OPTS=-Dspark.deploy.recoveryMode=ZOOKEEPER -Dspark.deploy.zookeeper.url=zk1.production.local:2181,zk2.production.local:2181,zk3.production.local:2181 -Dspark.deploy.zookeeper.dir=/spark-ha
+      - SPARK_RPC_AUTHENTICATION_ENABLED=${SPARK_RPC_AUTHENTICATION_ENABLED}
+      - SPARK_RPC_AUTHENTICATION_SECRET=${SPARK_RPC_AUTHENTICATION_SECRET}
+      - SPARK_RPC_ENCRYPTION_ENABLED=${SPARK_RPC_ENCRYPTION_ENABLED}
+    depends_on:
+      - zookeeper-1
+      - zookeeper-2
+      - zookeeper-3
+    restart: always
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == server1
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+
+  # Similar configuration for spark-master-2, spark-master-3
+  # and workers...
+```
+
+### Step 3: Deploy on Docker Swarm
+
+```bash
+# Initialize Swarm on manager node
+docker swarm init --advertise-addr <MANAGER-IP>
+
+# Join worker nodes
+docker swarm join --token <TOKEN> <MANAGER-IP>:2377
+
+# Create overlay network
+docker network create --driver overlay --attachable spark-net
+
+# Deploy stack
+docker stack deploy -c docker-compose.prod.yml spark-ha
+```
+
+### Step 4: Deploy on Kubernetes (Alternative)
+
+Create Kubernetes manifests:
+
+```yaml
+# zookeeper-statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zookeeper
+spec:
+  serviceName: zookeeper
+  replicas: 3
+  selector:
+    matchLabels:
+      app: zookeeper
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+    spec:
+      containers:
+      - name: zookeeper
+        image: zookeeper:3.9
+        ports:
+        - containerPort: 2181
+          name: client
+        - containerPort: 2888
+          name: follower
+        - containerPort: 3888
+          name: election
+        env:
+        - name: ZOO_MY_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        volumeMounts:
+        - name: data
+          mountPath: /data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 10Gi
+```
+
+Deploy to K8s:
+
+```bash
+kubectl apply -f zookeeper-statefulset.yaml
+kubectl apply -f spark-master-deployment.yaml
+kubectl apply -f spark-worker-deployment.yaml
+```
+
+## 🔒 Security Configuration
+
+### 1. Enable Spark RPC Authentication
+
+```bash
+# Generate secret
+SPARK_SECRET=$(openssl rand -base64 32)
+
+# Add to .env
+echo "SPARK_RPC_AUTHENTICATION_SECRET=$SPARK_SECRET" >> production.env
+```
+
+### 2. Enable SSL/TLS
+
+Generate certificates:
+
+```bash
+# Generate keystore
+keytool -genkeypair -alias spark -keyalg RSA -keysize 2048 \
+  -validity 365 -keystore spark-keystore.jks
+
+# Generate truststore
+keytool -export -alias spark -file spark-cert.pem \
+  -keystore spark-keystore.jks
+keytool -import -alias spark -file spark-cert.pem \
+  -keystore spark-truststore.jks
+```
+
+Update docker-compose:
+
+```yaml
+environment:
+  - SPARK_SSL_ENABLED=true
+  - SPARK_SSL_KEYSTORE=/opt/spark/conf/spark-keystore.jks
+  - SPARK_SSL_KEYSTORE_PASSWORD=${KEYSTORE_PASSWORD}
+  - SPARK_SSL_TRUSTSTORE=/opt/spark/conf/spark-truststore.jks
+  - SPARK_SSL_TRUSTSTORE_PASSWORD=${TRUSTSTORE_PASSWORD}
+volumes:
+  - ./certs/spark-keystore.jks:/opt/spark/conf/spark-keystore.jks:ro
+  - ./certs/spark-truststore.jks:/opt/spark/conf/spark-truststore.jks:ro
+```
+
+### 3. ZooKeeper Authentication
+
+```yaml
+environment:
+  - ZOO_ENABLE_AUTH=yes
+  - ZOO_SERVER_USERS=spark
+  - ZOO_SERVER_PASSWORDS=${ZK_PASSWORD}
+  - ZOO_CLIENT_USER=spark
+  - ZOO_CLIENT_PASSWORD=${ZK_PASSWORD}
+```
+
+## 📊 Monitoring Setup
+
+### 1. Prometheus + Grafana
+
+Create `prometheus.yml`:
+
+```yaml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'spark-master'
+    static_configs:
+      - targets:
+        - 'spark-master-1:8080'
+        - 'spark-master-2:8081'
+        - 'spark-master-3:8082'
+
+  - job_name: 'spark-workers'
+    static_configs:
+      - targets:
+        - 'spark-worker-1:8081'
+        - 'spark-worker-2:8081'
+        - 'spark-worker-3:8081'
+
+  - job_name: 'zookeeper'
+    static_configs:
+      - targets:
+        - 'zookeeper-1:7000'
+        - 'zookeeper-2:7000'
+        - 'zookeeper-3:7000'
+```
+
+Add to docker-compose:
+
+```yaml
+prometheus:
+  image: prom/prometheus:latest
+  ports:
+    - "9090:9090"
+  volumes:
+    - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    - prometheus-data:/prometheus
+  networks:
+    - spark-net
+
+grafana:
+  image: grafana/grafana:latest
+  ports:
+    - "3000:3000"
+  environment:
+    - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+  volumes:
+    - grafana-data:/var/lib/grafana
+  networks:
+    - spark-net
+```
+
+### 2. ELK Stack for Logs
+
+```yaml
+elasticsearch:
+  image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+  environment:
+    - discovery.type=single-node
+    - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+  ports:
+    - "9200:9200"
+
+logstash:
+  image: docker.elastic.co/logstash/logstash:8.11.0
+  volumes:
+    - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+  depends_on:
+    - elasticsearch
+
+kibana:
+  image: docker.elastic.co/kibana/kibana:8.11.0
+  ports:
+    - "5601:5601"
+  depends_on:
+    - elasticsearch
+```
+
+### 3. Alerting
+
+Create `alertmanager.yml`:
+
+```yaml
+route:
+  receiver: 'team-notifications'
+
+receivers:
+  - name: 'team-notifications'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#spark-alerts'
+        text: 'Alert: {{ .CommonAnnotations.summary }}'
+    email_configs:
+      - to: 'team@company.com'
+        from: 'alerts@company.com'
+        smarthost: 'smtp.company.com:587'
+```
+
+## 🔄 Backup Strategy
+
+### 1. ZooKeeper Data Backup
+
+```bash
+#!/bin/bash
+# backup-zookeeper.sh
+
+BACKUP_DIR="/backup/zookeeper"
+DATE=$(date +%Y%m%d_%H%M%S)
+
+for i in 1 2 3; do
+  docker exec zookeeper-$i tar czf /tmp/zk-backup-$i-$DATE.tar.gz /data /datalog
+  docker cp zookeeper-$i:/tmp/zk-backup-$i-$DATE.tar.gz $BACKUP_DIR/
+done
+
+# Keep only last 7 days
+find $BACKUP_DIR -name "zk-backup-*" -mtime +7 -delete
+```
+
+### 2. Spark Configuration Backup
+
+```bash
+#!/bin/bash
+# backup-spark-config.sh
+
+BACKUP_DIR="/backup/spark-config"
+DATE=$(date +%Y%m%d_%H%M%S)
+
+# Backup docker-compose and env files
+tar czf $BACKUP_DIR/spark-config-$DATE.tar.gz \
+  docker-compose.yml \
+  .env \
+  *.sh
+
+# Keep only last 30 days
+find $BACKUP_DIR -name "spark-config-*" -mtime +30 -delete
+```
+
+### 3. Automated Backup with Cron
+
+```bash
+# crontab -e
+0 2 * * * /opt/spark-ha/backup-zookeeper.sh >> /var/log/zk-backup.log 2>&1
+0 3 * * * /opt/spark-ha/backup-spark-config.sh >> /var/log/spark-config-backup.log 2>&1
+```
+
+## 🚀 Rolling Updates
+
+### Update Strategy
+
+```bash
+#!/bin/bash
+# rolling-update.sh
+
+NEW_IMAGE="apache/spark:3.5.1"
+
+# Update masters one by one
+for i in 1 2 3; do
+  echo "Updating spark-master-$i..."
+  
+  # Stop the master
+  docker stop spark-master-$i
+  
+  # Update image
+  docker rm spark-master-$i
+  
+  # Start with new image
+  IMAGE=$NEW_IMAGE docker-compose up -d spark-master-$i
+  
+  # Wait for it to join
+  sleep 30
+  
+  echo "spark-master-$i updated successfully"
+done
+
+# Update workers
+for i in 1 2 3; do
+  echo "Updating spark-worker-$i..."
+  docker stop spark-worker-$i
+  docker rm spark-worker-$i
+  IMAGE=$NEW_IMAGE docker-compose up -d spark-worker-$i
+  sleep 10
+done
+
+echo "Rolling update completed!"
+```
+
+## 📈 Performance Tuning
+
+### 1. JVM Tuning
+
+```yaml
+environment:
+  - SPARK_DAEMON_JAVA_OPTS=-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:InitiatingHeapOccupancyPercent=35
+  - SPARK_EXECUTOR_JAVA_OPTS=-XX:+UseG1GC -XX:+PrintGCDetails -XX:+PrintGCTimeStamps
+```
+
+### 2. Network Optimization
+
+```yaml
+environment:
+  - SPARK_NETWORK_TIMEOUT=600s
+  - SPARK_SHUFFLE_IO_RETRIES=10
+  - SPARK_SHUFFLE_IO_MAX_RETRIES=10
+```
+
+### 3. Resource Allocation
+
+```yaml
+environment:
+  - SPARK_WORKER_CORES=24
+  - SPARK_WORKER_MEMORY=64G
+  - SPARK_EXECUTOR_CORES=4
+  - SPARK_EXECUTOR_MEMORY=8G
+  - SPARK_DRIVER_MEMORY=4G
+```
+
+## 🧪 Testing in Production
+
+### 1. Smoke Test
+
+```bash
+# test-production.sh
+#!/bin/bash
+
+echo "Running smoke tests..."
+
+# Test 1: Submit simple job
+docker exec spark-master-1 spark-submit \
+  --master spark://spark-master-1:7077,spark-master-2:7077,spark-master-3:7077 \
+  --class org.apache.spark.examples.SparkPi \
+  /opt/spark/examples/jars/spark-examples*.jar 100
+
+# Test 2: Check all services
+curl -s http://spark-master-1:8080 | grep -q "ALIVE" || echo "Master 1 not ALIVE"
+curl -s http://spark-master-2:8081 | grep -q "STANDBY" || echo "Master 2 not STANDBY"
+curl -s http://spark-master-3:8082 | grep -q "STANDBY" || echo "Master 3 not STANDBY"
+
+echo "Smoke tests completed"
+```
+
+### 2. Load Test
+
+```bash
+# Generate load
+for i in {1..10}; do
+  spark-submit \
+    --master spark://masters:7077 \
+    --deploy-mode cluster \
+    your-application.jar &
+done
+
+wait
+echo "Load test completed"
+```
+
+## 🆘 Disaster Recovery
+
+### Scenario 1: All Masters Down
+
+```bash
+# 1. Start ZooKeeper if needed
+docker start zookeeper-1 zookeeper-2 zookeeper-3
+
+# 2. Clear stale data
+docker exec zookeeper-1 zkCli.sh rmr /spark-ha
+
+# 3. Start all masters
+docker start spark-master-1 spark-master-2 spark-master-3
+
+# 4. Verify election
+docker logs spark-master-1 | grep "elected leader"
+```
+
+### Scenario 2: ZooKeeper Quorum Lost
+
+```bash
+# 1. Stop all ZooKeeper nodes
+docker stop zookeeper-1 zookeeper-2 zookeeper-3
+
+# 2. Restore from backup
+for i in 1 2 3; do
+  docker cp backup/zk-data-$i zookeeper-$i:/data
+done
+
+# 3. Start ZooKeeper cluster
+docker start zookeeper-1 zookeeper-2 zookeeper-3
+
+# 4. Verify quorum
+docker exec zookeeper-1 zkServer.sh status
+```
+
+## 📚 Production Checklist
+
+### Daily
+- [ ] Check cluster health
+- [ ] Review error logs
+- [ ] Monitor resource usage
+- [ ] Verify backups
+
+### Weekly
+- [ ] Review performance metrics
+- [ ] Check disk space
+- [ ] Update documentation
+- [ ] Test failover
+
+### Monthly
+- [ ] Security audit
+- [ ] Capacity planning review
+- [ ] Update dependencies
+- [ ] Disaster recovery drill
+
+## 🔗 Additional Resources
+
+- [Spark Production Best Practices](https://spark.apache.org/docs/latest/configuration.html)
+- [ZooKeeper Operations Guide](https://zookeeper.apache.org/doc/current/zookeeperAdmin.html)
+- [Docker Swarm Documentation](https://docs.docker.com/engine/swarm/)
+- [Kubernetes Documentation](https://kubernetes.io/docs/home/)
