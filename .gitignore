@@ -219,4 +219,7 @@ Thumbs.db
 zk*/
 
 # Spark logs (if mounted locally)
+spark/
+
+# Spark events (if mounted locally)
 spark-events/

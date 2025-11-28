@@ -35,6 +35,10 @@ services:
       ZOO_MAX_CLIENT_CNXNS: ${ZOO_MAX_CLIENT_CNXNS}
       ZOO_AUTOPURGE_SNAPRETAINCOUNT: ${ZOO_AUTOPURGE_SNAPRETAINCOUNT}
       ZOO_AUTOPURGE_PURGEINTERVAL: ${ZOO_AUTOPURGE_PURGEINTERVAL}
+      ZOO_MAX_SESSION_TIMEOUT: ${ZOO_MAX_SESSION_TIMEOUT}
+      ZOO_MIN_SESSION_TIMEOUT: ${ZOO_MIN_SESSION_TIMEOUT}
+      ZOO_CLIENT_PORT: ${ZOO_CLIENT_PORT}
+      TZ: Asia/Ho_Chi_Minh
     volumes:
       - ./zk1/zk1-data:/data
       - ./zk1/zk1-log:/datalog
@@ -63,6 +67,10 @@ services:
       ZOO_MAX_CLIENT_CNXNS: ${ZOO_MAX_CLIENT_CNXNS}
       ZOO_AUTOPURGE_SNAPRETAINCOUNT: ${ZOO_AUTOPURGE_SNAPRETAINCOUNT}
       ZOO_AUTOPURGE_PURGEINTERVAL: ${ZOO_AUTOPURGE_PURGEINTERVAL}
+      ZOO_MAX_SESSION_TIMEOUT: ${ZOO_MAX_SESSION_TIMEOUT}
+      ZOO_MIN_SESSION_TIMEOUT: ${ZOO_MIN_SESSION_TIMEOUT}
+      ZOO_CLIENT_PORT: ${ZOO_CLIENT_PORT}
+      TZ: Asia/Ho_Chi_Minh
     volumes:
       - ./zk2/zk2-data:/data
       - ./zk2/zk2-log:/datalog
@@ -91,6 +99,10 @@ services:
       ZOO_MAX_CLIENT_CNXNS: ${ZOO_MAX_CLIENT_CNXNS}
       ZOO_AUTOPURGE_SNAPRETAINCOUNT: ${ZOO_AUTOPURGE_SNAPRETAINCOUNT}
       ZOO_AUTOPURGE_PURGEINTERVAL: ${ZOO_AUTOPURGE_PURGEINTERVAL}
+      ZOO_MAX_SESSION_TIMEOUT: ${ZOO_MAX_SESSION_TIMEOUT}
+      ZOO_MIN_SESSION_TIMEOUT: ${ZOO_MIN_SESSION_TIMEOUT}
+      ZOO_CLIENT_PORT: ${ZOO_CLIENT_PORT}
+      TZ: Asia/Ho_Chi_Minh
     volumes:
       - ./zk3/zk3-data:/data
       - ./zk3/zk3-log:/datalog
@@ -125,8 +137,17 @@ services:
         -Dspark.eventLog.enabled=${SPARK_EVENTLOG_ENABLED}
         -Dspark.eventLog.dir=${SPARK_EVENTLOG_DIR}
         -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR}
+      SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY}
+      SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
+      SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
+#      TZ: Asia/Ho_Chi_Minh
+#      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+#      CLICKHOUSE_HOST: ${CLICKHOUSE_HOST}
+#      CLICKHOUSE_PORT: ${CLICKHOUSE_PORT}
     volumes:
       - ./spark-events:/opt/spark/spark-events
+      - ./spark/jars:/opt/spark/jars
+      - ./apps:/opt/spark/apps
     depends_on:
       - zookeeper-1
       - zookeeper-2
@@ -167,8 +188,17 @@ services:
         -Dspark.eventLog.enabled=${SPARK_EVENTLOG_ENABLED}
         -Dspark.eventLog.dir=${SPARK_EVENTLOG_DIR}
         -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR}
+      SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY}
+      SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
+      SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
+#      TZ: Asia/Ho_Chi_Minh
+#      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+#      CLICKHOUSE_HOST: ${CLICKHOUSE_HOST}
+#      CLICKHOUSE_PORT: ${CLICKHOUSE_PORT}
     volumes:
       - ./spark-events:/opt/spark/spark-events
+      - ./spark/jars:/opt/spark/jars
+      - ./apps:/opt/spark/apps
     depends_on:
       - zookeeper-1
       - zookeeper-2
@@ -183,7 +213,7 @@ services:
         tail -f /opt/spark/logs/*"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      test: ["CMD", "curl", "-f", "http://localhost:8081"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -209,8 +239,17 @@ services:
         -Dspark.eventLog.enabled=${SPARK_EVENTLOG_ENABLED}
         -Dspark.eventLog.dir=${SPARK_EVENTLOG_DIR}
         -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR}
+      SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY}
+      SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
+      SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
+#      TZ: Asia/Ho_Chi_Minh
+#      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+#      CLICKHOUSE_HOST: ${CLICKHOUSE_HOST}
+#      CLICKHOUSE_PORT: ${CLICKHOUSE_PORT}
     volumes:
       - ./spark-events:/opt/spark/spark-events
+      - ./spark/jars:/opt/spark/jars
+      - ./apps:/opt/spark/apps
     depends_on:
       - zookeeper-1
       - zookeeper-2
@@ -225,7 +264,7 @@ services:
         tail -f /opt/spark/logs/*"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      test: ["CMD", "curl", "-f", "http://localhost:8082"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -248,6 +287,11 @@ services:
       SPARK_WORKER_CORES: ${SPARK_WORKER_CORES}
       SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY}
       SPARK_WORKER_WEBUI_PORT: ${SPARK_WORKER_WEBUI_PORT}
+      SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
+      SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
+#      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - ./spark/jars:/opt/spark/jars
     depends_on:
       - spark-master-1
       - spark-master-2
@@ -276,6 +320,11 @@ services:
       SPARK_WORKER_CORES: ${SPARK_WORKER_CORES}
       SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY}
       SPARK_WORKER_WEBUI_PORT: ${SPARK_WORKER_WEBUI_PORT}
+      SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
+      SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
+#      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - ./spark/jars:/opt/spark/jars
     depends_on:
       - spark-master-1
       - spark-master-2
@@ -304,6 +353,11 @@ services:
       SPARK_WORKER_CORES: ${SPARK_WORKER_CORES}
       SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY}
       SPARK_WORKER_WEBUI_PORT: ${SPARK_WORKER_WEBUI_PORT}
+      SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
+      SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
+#      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - ./spark/jars:/opt/spark/jars
     depends_on:
       - spark-master-1
       - spark-master-2
@@ -334,6 +388,7 @@ services:
         -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR}
         -Dspark.history.retainedApplications=${SPARK_HISTORY_RETAINED_APP}
         -Dspark.history.ui.port=${SPARK_HISTORY_UI_PORT}
+#      TZ: Asia/Ho_Chi_Minh
     volumes:
       - ./spark-events:/opt/spark/spark-events:ro
     depends_on:

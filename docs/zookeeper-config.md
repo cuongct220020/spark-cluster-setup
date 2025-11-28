@@ -50,13 +50,13 @@ ZooKeeper hoạt động theo mô hình **ensemble** - một cụm các server l
 environment:
   # ID duy nhất cho mỗi node (1, 2, 3, ...)
   ZOO_MY_ID: 1
-  
+
   # Danh sách tất cả các servers trong ensemble
   ZOO_SERVERS: server.1=zookeeper-1:2888:3888;2181 server.2=zookeeper-2:2888:3888;2181 server.3=zookeeper-3:2888:3888;2181
-  
+
   # Cho phép các lệnh 4-letter để monitoring
-  ZOO_4LW_COMMANDS_WHITELIST: "*"
-  
+  ZOO_4LW_COMMANDS_WHITELIST: "ruok,stat,mntr"
+
   # (Optional) Cấu hình thêm
   ZOO_TICK_TIME: 2000              # Thời gian tick cơ bản (ms)
   ZOO_INIT_LIMIT: 10               # Timeout để follower kết nối leader
@@ -64,6 +64,10 @@ environment:
   ZOO_MAX_CLIENT_CNXNS: 60         # Max connections từ 1 client
   ZOO_AUTOPURGE_SNAPRETAINCOUNT: 3 # Số snapshot giữ lại
   ZOO_AUTOPURGE_PURGEINTERVAL: 1   # Interval (giờ) để tự động dọn dẹp
+  ZOO_MAX_SESSION_TIMEOUT: 40000   # Max session timeout (ms)
+  ZOO_MIN_SESSION_TIMEOUT: 4000    # Min session timeout (ms)
+  ZOO_CLIENT_PORT: 2181            # Client port
+  TZ: Asia/Ho_Chi_Minh             # Timezone
 ```
 
 ### Port Explanation
@@ -73,6 +77,11 @@ ZooKeeper sử dụng 3 ports:
 1. **2181** - Client port (Spark Masters kết nối vào đây)
 2. **2888** - Follower port (followers kết nối leader)
 3. **3888** - Election port (để bầu chọn leader)
+
+Trong setup hiện tại, 3 ZooKeeper nodes được expose trên các ports:
+- **zookeeper-1**: 2181 (máy local port 2181)
+- **zookeeper-2**: 2182 (máy local port 2182)
+- **zookeeper-3**: 2183 (máy local port 2183)
 
 ## Cấu hình Spark với ZooKeeper
 

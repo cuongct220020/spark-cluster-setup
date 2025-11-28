@@ -1,269 +1,262 @@
-# Spark High Availability Cluster với ZooKeeper
+# Spark High Availability Cluster with ZooKeeper
 
-Cụm Spark Standalone với High Availability sử dụng ZooKeeper cho master election và failover tự động.
+A highly available Apache Spark Standalone cluster using ZooKeeper for master election and automatic failover.
 
-## Kiến trúc
+## 🏗️ Architecture
 
 ### ZooKeeper Cluster (3 nodes)
 - `zookeeper-1`: Port 2181
-- `zookeeper-2`: Port 2182  
+- `zookeeper-2`: Port 2182
 - `zookeeper-3`: Port 2183
 
 ### Spark Master Cluster (3 nodes)
-- `spark-master-1`: Port 7077 (Spark), 8080 (Web UI) - **ACTIVE hoặc STANDBY**
-- `spark-master-2`: Port 7078 (Spark), 8081 (Web UI) - **ACTIVE hoặc STANDBY**
-- `spark-master-3`: Port 7079 (Spark), 8082 (Web UI) - **ACTIVE hoặc STANDBY**
+- `spark-master-1`: Port 7077 (Spark), 8080 (Web UI) - **ACTIVE or STANDBY**
+- `spark-master-2`: Port 7078 (Spark), 8081 (Web UI) - **ACTIVE or STANDBY**
+- `spark-master-3`: Port 7079 (Spark), 8082 (Web UI) - **ACTIVE or STANDBY**
 
 ### Spark Workers (3 nodes)
 - `spark-worker-1`: Port 8083 (Web UI)
 - `spark-worker-2`: Port 8084 (Web UI)
 - `spark-worker-3`: Port 8085 (Web UI)
 
-## Khởi động cụm
+### Spark History Server
+- `spark-history`: Port 18080 (Web UI)
 
+## 🚀 Quick Start
+
+### Prerequisites
+- Docker 20.10+
+- Docker Compose v2+
+- Minimum 8GB RAM available to Docker
+
+### 1. Clone and Setup
 ```bash
-# Khởi động toàn bộ cluster
-docker-compose up -d
+# Clone the repository
+git clone <repository-url>
+cd spark-cluster-setup
 
-# Xem logs
-docker-compose logs -f
+# Initialize configuration (create required directories)
+make configure
 
-# Kiểm tra trạng thái
-docker-compose ps
+# Copy environment file
+cp .env.example .env
+# Edit .env to customize configuration if needed
 ```
 
-## Kiểm tra trạng thái
-
-### 1. Kiểm tra ZooKeeper Cluster
-
+### 2. Start the Cluster
 ```bash
-# Kiểm tra ZooKeeper node 1
-docker exec -it zookeeper-1 zkServer.sh status
+# Start the entire cluster with one command
+make up
 
-# Kiểm tra ZooKeeper node 2
-docker exec -it zookeeper-2 zkServer.sh status
-
-# Kiểm tra ZooKeeper node 3
-docker exec -it zookeeper-3 zkServer.sh status
+# Or start with quick start (includes health check and UI display)
+make quickstart
 ```
 
-Kết quả sẽ hiển thị: **leader** (1 node) và **follower** (2 nodes)
+### 3. Check Status
+```bash
+# Check cluster status
+make status
 
-### 2. Kiểm tra Spark Master Status
+# Run health check
+make health-check
 
-Truy cập Web UI của các Master:
-- http://localhost:8080 (Master 1)
-- http://localhost:8081 (Master 2)
-- http://localhost:8082 (Master 3)
+# View all UI addresses
+make ui
+```
 
-Chỉ có **1 Master** hiển thị status **ALIVE** (active), các Master khác sẽ hiển thị **STANDBY**.
+### 4. Submit Applications
+```bash
+# Submit SparkPi example (client mode)
+make submit-pi
 
-### 3. Kiểm tra Spark Workers
+# Submit SparkPi example (cluster mode)
+make submit-pi-cluster
 
-Workers chỉ hiển thị trên Web UI của **Active Master**.
+# Submit with supervision (auto-restart)
+make submit-pi-supervised
+```
 
-## Submit Spark Application
+## 📋 Management Commands
 
-### Cú pháp submit với HA
+### Cluster Management
+```bash
+make up           # Start cluster
+make down         # Stop cluster
+make restart      # Restart cluster
+make clean        # Stop cluster and remove all volumes
+make status       # Show container status
+make logs         # View all service logs
+```
+
+### Service-Specific Logs
+```bash
+make logs-zk      # ZooKeeper logs
+make logs-master  # Spark Master logs
+make logs-worker  # Spark Worker logs
+make logs-history # Spark History logs
+```
+
+### Shell Access
+```bash
+make shell-master # Access spark-master-1 shell
+make shell-worker # Access spark-worker-1 shell
+make shell-zk     # Access ZooKeeper CLI
+```
+
+### Failover Testing
+```bash
+make stop-master-1  # Stop master 1 (for failover testing)
+make start-master-1 # Start master 1
+make test-failover  # Run failover test
+make test-cluster   # Run cluster health check
+```
+
+## 🔧 Configuration
+
+### Environment Variables
+Edit `.env` file to customize settings:
 
 ```bash
-docker exec -it spark-master-1 spark-submit \
+# Spark Image Version
+SPARK_IMAGE=apache/spark:3.5.0
+
+# Spark Master Configuration
+SPARK_MASTER_URL=spark://spark-master-1:7077,spark-master-2:7077,spark-master-3:7077
+SPARK_MASTER_PORT=7077
+SPARK_MASTER_WEBUI_PORT=8080
+
+# Spark Worker Configuration
+SPARK_WORKER_CORES=2
+SPARK_WORKER_MEMORY=2G
+SPARK_WORKER_WEBUI_PORT=8081
+SPARK_DRIVER_MEMORY=1G
+
+# Spark HA Recovery (ZooKeeper)
+SPARK_RECOVERY_MODE=ZOOKEEPER
+SPARK_ZK_URL=zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+SPARK_ZK_DIR=/spark-ha
+
+# Spark Event Logs + History Server
+SPARK_EVENTLOG_ENABLED=true
+SPARK_EVENTLOG_DIR=/opt/spark/spark-events
+SPARK_HISTORY_LOG_DIR=/opt/spark/spark-events
+SPARK_HISTORY_RETAINED_APP=50
+SPARK_HISTORY_UI_PORT=18080
+
+# ZooKeeper Image and Configuration
+ZOO_IMAGE=zookeeper:3.9
+ZOO_SERVERS="server.1=zookeeper-1:2888:3888;2181 server.2=zookeeper-2:2888:3888;2181 server.3=zookeeper-3:2888:3888;2181"
+```
+
+### Submitting Custom Applications
+```bash
+# Example: Submit a custom JAR file
+make submit-app APP_PATH=/opt/spark/apps/my-app.jar CLASS=org.myorg.MyApp MODE=cluster
+
+# Example: Submit a Python application
+docker exec -it spark-master-1 /opt/spark/bin/spark-submit \
   --master spark://spark-master-1:7077,spark-master-2:7077,spark-master-3:7077 \
   --deploy-mode cluster \
-  --class org.apache.spark.examples.SparkPi \
-  /opt/spark/examples/jars/spark-examples_2.12-3.5.0.jar \
-  1000
+  /opt/spark/apps/my-script.py
 ```
 
-### Ví dụ với Python
+## 🧪 Health Checks and Testing
 
+### Cluster Health Check
 ```bash
-docker exec -it spark-master-1 spark-submit \
-  --master spark://spark-master-1:7077,spark-master-2:7077,spark-master-3:7077 \
-  --deploy-mode client \
-  /path/to/your/script.py
+# Run comprehensive health check
+make test-cluster
 ```
 
-### Supervised Mode (Driver tự động restart)
-
+### Failover Testing
 ```bash
-docker exec -it spark-master-1 spark-submit \
-  --master spark://spark-master-1:7077,spark-master-2:7077,spark-master-3:7077 \
-  --deploy-mode cluster \
-  --supervise \
-  --class YourMainClass \
-  /path/to/your/app.jar
+# Test master failover
+make test-failover
+
+# Or manually test by stopping an active master
+make stop-master-1
+# Wait for failover, then check status with:
+make status
 ```
 
-## Test Failover
-
-### Test 1: Kill Active Master
-
+### Monitoring
 ```bash
-# Xác định Master nào đang ACTIVE (ví dụ: spark-master-1)
-docker stop spark-master-1
+# View resource usage
+make top
 
-# Chờ 10-20 giây và kiểm tra
-# Một trong hai Master còn lại sẽ trở thành ACTIVE
-# Workers và applications đang chạy sẽ tự động reconnect
+# Watch container status
+make watch-logs
 ```
 
-Kiểm tra logs:
+## 🌐 Web UI Access
+
+- **Spark Master 1**: http://localhost:8080
+- **Spark Master 2**: http://localhost:8081
+- **Spark Master 3**: http://localhost:8082
+- **Spark Worker 1**: http://localhost:8083
+- **Spark Worker 2**: http://localhost:8084
+- **Spark Worker 3**: http://localhost:8085
+- **Spark History**: http://localhost:18080
+
+## 🔍 Troubleshooting
+
+### Check Component Status
 ```bash
-docker logs spark-master-2 | tail -20
-docker logs spark-worker-1 | tail -20
+# Check ZooKeeper status
+make zk-status
+
+# Check ZooKeeper data
+make zk-data
+
+# Access ZooKeeper CLI
+make zk-cli
+
+# View specific logs
+make logs-master
+make logs-worker
+make logs-zk
 ```
 
-Bạn sẽ thấy:
-- Master 2 hoặc 3: `I have been elected leader! New state: ALIVE`
-- Workers: `Master has changed, new master is at spark://...`
+### Common Issues
 
-### Test 2: Kill ZooKeeper Node
+1. **Containers failing to start**: Check available system resources (RAM, disk space)
+2. **Master failover not working**: Verify ZooKeeper quorum (at least 2 out of 3 nodes running)
+3. **Applications not running**: Check that the active master is running and accessible
+4. **Network issues**: Ensure containers can communicate on the `spark-network`
 
+### Reset Cluster
 ```bash
-# Kill 1 trong 3 ZooKeeper nodes
-docker stop zookeeper-1
-
-# Cluster vẫn hoạt động bình thường (quorum = 2/3)
-# Spark Master vẫn hoạt động
-
-# Kill thêm 1 node nữa (quorum mất)
-docker stop zookeeper-2
-
-# Cluster không thể election Master mới
-# Nhưng Master hiện tại vẫn hoạt động
+# Clean restart (removes all data)
+make clean
+make up
 ```
 
-### Test 3: Restart Master đã kill
+## 💾 Backup and Maintenance
 
+### Backup ZooKeeper Data
 ```bash
-# Restart Master đã stop
-docker start spark-master-1
-
-# Master 1 sẽ khởi động lại ở chế độ STANDBY
+make backup-zk
 ```
 
-## Troubleshooting
-
-### Kiểm tra logs chi tiết
-
+### Update Images
 ```bash
-# ZooKeeper logs
-docker logs zookeeper-1
-docker logs zookeeper-2
-docker logs zookeeper-3
-
-# Spark Master logs
-docker logs spark-master-1
-docker logs spark-master-2
-docker logs spark-master-3
-
-# Spark Worker logs
-docker logs spark-worker-1
-docker logs spark-worker-2
-docker logs spark-worker-3
+make pull
+make restart
 ```
 
-### Kiểm tra ZooKeeper data
-
-```bash
-# Kết nối vào ZooKeeper CLI
-docker exec -it zookeeper-1 zkCli.sh
-
-# Trong CLI, kiểm tra Spark HA data
-ls /spark-ha
-get /spark-ha/master_status
-```
-
-### Reset cluster
-
-```bash
-# Dừng và xóa tất cả containers
-docker-compose down
-
-# Xóa volumes (nếu cần reset hoàn toàn)
-docker-compose down -v
-
-# Khởi động lại
-docker-compose up -d
-```
-
-## Cấu hình tùy chỉnh
-
-### Thay đổi tài nguyên Worker
-
-Chỉnh sửa trong `docker-compose.yml`:
-
-```yaml
-environment:
-  - SPARK_WORKER_CORES= ${SPARK_WORKER_CORES}     # Tăng số cores
-  - SPARK_WORKER_MEMORY= ${SPARK_WORKER_MEMORY}   # Tăng memory
-```
-
-### Thêm Workers
-
-Thêm service mới vào `docker-compose.yml`:
-
-```yaml
-spark-worker-4:
-  image: apache/spark:3.5.0
-  container_name: spark-worker-4
-  # ... tương tự worker khác
-```
-
-### Enable Security (nếu cần)
-
-Uncomment các dòng security trong file docker-compose:
-
-```yaml
-# - SPARK_RPC_AUTHENTICATION_ENABLED=yes
-# - SPARK_RPC_AUTHENTICATION_SECRET=devsecret
-# - SPARK_RPC_ENCRYPTION_ENABLED=yes
-```
-
-## Monitoring
-
-### ZooKeeper Metrics
-
-```bash
-# Kiểm tra trạng thái
-echo stat | nc localhost 2181
-
-# Kiểm tra config
-echo conf | nc localhost 2181
-
-# Kiểm tra connections
-echo cons | nc localhost 2181
-```
-
-### Spark Metrics
-
-Truy cập Web UI:
-- Active Master: http://localhost:8080
-- Worker 1: http://localhost:8083
-- Worker 2: http://localhost:8084
-- Worker 3: http://localhost:8085
-
-## Dừng cluster
-
-```bash
-# Dừng tất cả services
-docker-compose down
-
-# Dừng và xóa volumes
-docker-compose down -v
-```
-
-## 📚 Tham khảo
+## 📚 References
 
 - [Spark Standalone Mode](https://spark.apache.org/docs/latest/spark-standalone.html)
 - [Spark High Availability](https://spark.apache.org/docs/latest/spark-standalone.html#high-availability)
 - [ZooKeeper Documentation](https://zookeeper.apache.org/doc/current/)
+- [Docker Compose](https://docs.docker.com/compose/)
 
-## ⚠️ Lưu ý quan trọng
+## ⚠️ Production Considerations
 
-1. **Production Setup**: Trong production, nên deploy ZooKeeper và Spark trên các máy vật lý khác nhau
-2. **Network**: Đảm bảo network latency thấp giữa các nodes
-3. **Resources**: ZooKeeper cần ít tài nguyên, nhưng Spark Master cần memory đủ lớn
-4. **Backup**: Backup ZooKeeper data directory định kỳ
-5. **Monitoring**: Sử dụng monitoring tools (Prometheus, Grafana) cho production
+1. **Resource Planning**: Ensure sufficient RAM and CPU for all nodes
+2. **Network**: Maintain low latency between cluster nodes
+3. **Data Persistence**: Implement proper backup strategies for critical data
+4. **Monitoring**: Add production-grade monitoring (Prometheus/Grafana recommended)
+5. **Security**: Enable authentication and encryption for production deployments
+6. **Separation**: Deploy ZooKeeper and Spark on separate physical machines in production
+7. **Configuration**: Adjust memory and resource settings based on workloads

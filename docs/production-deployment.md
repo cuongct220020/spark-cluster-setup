@@ -97,13 +97,13 @@ SPARK_METRICS_ENABLED=true
 
 ### Step 2: Update Docker Compose for Production
 
-Create `docker-compose.prod.yml`:
+Create `docker-compose.prod.yml` based on the current docker-compose.yml:
 
 ```yaml
 version: '3.8'
 
 networks:
-  spark-net:
+  spark-network:
     driver: overlay
     attachable: true
 
@@ -120,24 +120,225 @@ volumes:
       type: nfs
       o: addr=nfs-server,rw
       device: ":/mnt/zk1-log"
+  zk2-data:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=nfs-server,rw
+      device: ":/mnt/zk2-data"
+  zk2-log:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=nfs-server,rw
+      device: ":/mnt/zk2-log"
+  zk3-data:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=nfs-server,rw
+      device: ":/mnt/zk3-data"
+  zk3-log:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=nfs-server,rw
+      device: ":/mnt/zk3-log"
+  spark-events:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=nfs-server,rw
+      device: ":/mnt/spark-events"
 
 services:
+  # ============================================
+  # ZooKeeper Cluster (3 nodes for HA)
+  # ============================================
   zookeeper-1:
-    image: ${ZOOKEEPER_IMAGE}
-    hostname: zk1.production.local
+    image: ${ZOO_IMAGE}
+    container_name: zookeeper-1
+    hostname: zookeeper-1.production.local
     networks:
-      - spark-net
+      - spark-network
     ports:
       - "2181:2181"
     environment:
       ZOO_MY_ID: 1
-      ZOO_SERVERS: server.1=zk1.production.local:2888:3888;2181 server.2=zk2.production.local:2888:3888;2181 server.3=zk3.production.local:2888:3888;2181
-      ZOO_4LW_COMMANDS_WHITELIST: "*"
-      JVMFLAGS: "-Xms${ZK_HEAP_SIZE}m -Xmx${ZK_HEAP_SIZE}m"
+      ZOO_SERVERS: ${ZOO_SERVERS}
+      ZOO_4LW_COMMANDS_WHITELIST: ${ZOO_4LW_COMMANDS_WHITELIST}
+      ZOO_TICK_TIME: ${ZOO_TICK_TIME}
+      ZOO_INIT_LIMIT: ${ZOO_INIT_LIMIT}
+      ZOO_SYNC_LIMIT: ${ZOO_SYNC_LIMIT}
+      ZOO_MAX_CLIENT_CNXNS: ${ZOO_MAX_CLIENT_CNXNS}
+      ZOO_AUTOPURGE_SNAPRETAINCOUNT: ${ZOO_AUTOPURGE_SNAPRETAINCOUNT}
+      ZOO_AUTOPURGE_PURGEINTERVAL: ${ZOO_AUTOPURGE_PURGEINTERVAL}
+      ZOO_MAX_SESSION_TIMEOUT: ${ZOO_MAX_SESSION_TIMEOUT}
+      ZOO_MIN_SESSION_TIMEOUT: ${ZOO_MIN_SESSION_TIMEOUT}
+      ZOO_CLIENT_PORT: ${ZOO_CLIENT_PORT}
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+      JVMFLAGS: "-Xms${ZK_HEAP_SIZE:-1024m} -Xmx${ZK_HEAP_SIZE:-1024m}"
     volumes:
       - zk1-data:/data
       - zk1-log:/datalog
     restart: always
+    healthcheck:
+      test: ["CMD", "zkServer.sh", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == server1
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  zookeeper-2:
+    image: ${ZOO_IMAGE}
+    container_name: zookeeper-2
+    hostname: zookeeper-2.production.local
+    networks:
+      - spark-network
+    ports:
+      - "2182:2181"
+    environment:
+      ZOO_MY_ID: 2
+      ZOO_SERVERS: ${ZOO_SERVERS}
+      ZOO_4LW_COMMANDS_WHITELIST: ${ZOO_4LW_COMMANDS_WHITELIST}
+      ZOO_TICK_TIME: ${ZOO_TICK_TIME}
+      ZOO_INIT_LIMIT: ${ZOO_INIT_LIMIT}
+      ZOO_SYNC_LIMIT: ${ZOO_SYNC_LIMIT}
+      ZOO_MAX_CLIENT_CNXNS: ${ZOO_MAX_CLIENT_CNXNS}
+      ZOO_AUTOPURGE_SNAPRETAINCOUNT: ${ZOO_AUTOPURGE_SNAPRETAINCOUNT}
+      ZOO_AUTOPURGE_PURGEINTERVAL: ${ZOO_AUTOPURGE_PURGEINTERVAL}
+      ZOO_MAX_SESSION_TIMEOUT: ${ZOO_MAX_SESSION_TIMEOUT}
+      ZOO_MIN_SESSION_TIMEOUT: ${ZOO_MIN_SESSION_TIMEOUT}
+      ZOO_CLIENT_PORT: ${ZOO_CLIENT_PORT}
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+      JVMFLAGS: "-Xms${ZK_HEAP_SIZE:-1024m} -Xmx${ZK_HEAP_SIZE:-1024m}"
+    volumes:
+      - zk2-data:/data
+      - zk2-log:/datalog
+    restart: always
+    healthcheck:
+      test: ["CMD", "zkServer.sh", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == server2
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  zookeeper-3:
+    image: ${ZOO_IMAGE}
+    container_name: zookeeper-3
+    hostname: zookeeper-3.production.local
+    networks:
+      - spark-network
+    ports:
+      - "2183:2181"
+    environment:
+      ZOO_MY_ID: 3
+      ZOO_SERVERS: ${ZOO_SERVERS}
+      ZOO_4LW_COMMANDS_WHITELIST: ${ZOO_4LW_COMMANDS_WHITELIST}
+      ZOO_TICK_TIME: ${ZOO_TICK_TIME}
+      ZOO_INIT_LIMIT: ${ZOO_INIT_LIMIT}
+      ZOO_SYNC_LIMIT: ${ZOO_SYNC_LIMIT}
+      ZOO_MAX_CLIENT_CNXNS: ${ZOO_MAX_CLIENT_CNXNS}
+      ZOO_AUTOPURGE_SNAPRETAINCOUNT: ${ZOO_AUTOPURGE_SNAPRETAINCOUNT}
+      ZOO_AUTOPURGE_PURGEINTERVAL: ${ZOO_AUTOPURGE_PURGEINTERVAL}
+      ZOO_MAX_SESSION_TIMEOUT: ${ZOO_MAX_SESSION_TIMEOUT}
+      ZOO_MIN_SESSION_TIMEOUT: ${ZOO_MIN_SESSION_TIMEOUT}
+      ZOO_CLIENT_PORT: ${ZOO_CLIENT_PORT}
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+      JVMFLAGS: "-Xms${ZK_HEAP_SIZE:-1024m} -Xmx${ZK_HEAP_SIZE:-1024m}"
+    volumes:
+      - zk3-data:/data
+      - zk3-log:/datalog
+    restart: always
+    healthcheck:
+      test: ["CMD", "zkServer.sh", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == server3
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  # ============================================
+  # Spark Master Nodes (HA)
+  # ============================================
+  spark-master-1:
+    image: ${SPARK_IMAGE}
+    container_name: spark-master-1
+    hostname: spark-master-1.production.local
+    networks:
+      - spark-network
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+    environment:
+      SPARK_MODE: master
+      SPARK_MASTER_HOST: spark-master-1.production.local
+      SPARK_MASTER_PORT: ${SPARK_MASTER_PORT}
+      SPARK_MASTER_WEBUI_PORT: ${SPARK_MASTER_WEBUI_PORT}
+      SPARK_DAEMON_JAVA_OPTS: |
+        -Dspark.deploy.recoveryMode=${SPARK_RECOVERY_MODE}
+        -Dspark.deploy.zookeeper.url=${SPARK_ZK_URL}
+        -Dspark.deploy.zookeeper.dir=${SPARK_ZK_DIR}
+        -Dspark.eventLog.enabled=${SPARK_EVENTLOG_ENABLED}
+        -Dspark.eventLog.dir=${SPARK_EVENTLOG_DIR}
+        -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR}
+        -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED:-false}
+        -Dspark.authenticate.secret=${SPARK_RPC_AUTHENTICATION_SECRET}
+      SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY}
+      SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
+      SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    volumes:
+      - spark-events:/opt/spark/spark-events
+      - /path/to/spark/jars:/opt/spark/jars  # Use shared storage
+      - /path/to/spark/apps:/opt/spark/apps  # Use shared storage
+    depends_on:
+      - zookeeper-1
+      - zookeeper-2
+      - zookeeper-3
+    command: >
+      bash -c "
+        echo 'Waiting for ZooKeeper to be ready...';
+        sleep 10;
+        mkdir -p /opt/spark/spark-events;
+        echo 'Starting Spark Master 1...';
+        /opt/spark/sbin/start-master.sh;
+        tail -f /opt/spark/logs/*"
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     deploy:
       placement:
         constraints:
@@ -150,26 +351,251 @@ services:
           cpus: '2'
           memory: 4G
 
-  spark-master-1:
-    image: ${IMAGE}
-    hostname: spark-master-1.production.local
+  spark-master-2:
+    image: ${SPARK_IMAGE}
+    container_name: spark-master-2
+    hostname: spark-master-2.production.local
     networks:
-      - spark-net
+      - spark-network
     ports:
-      - "7077:7077"
-      - "8080:8080"
+      - "7078:7077"
+      - "8081:8080"
     environment:
-      - SPARK_MODE=master
-      - SPARK_MASTER_HOST=spark-master-1.production.local
-      - SPARK_DAEMON_MEMORY=${SPARK_DAEMON_MEMORY}
-      - SPARK_DAEMON_JAVA_OPTS=-Dspark.deploy.recoveryMode=ZOOKEEPER -Dspark.deploy.zookeeper.url=zk1.production.local:2181,zk2.production.local:2181,zk3.production.local:2181 -Dspark.deploy.zookeeper.dir=/spark-ha
-      - SPARK_RPC_AUTHENTICATION_ENABLED=${SPARK_RPC_AUTHENTICATION_ENABLED}
-      - SPARK_RPC_AUTHENTICATION_SECRET=${SPARK_RPC_AUTHENTICATION_SECRET}
-      - SPARK_RPC_ENCRYPTION_ENABLED=${SPARK_RPC_ENCRYPTION_ENABLED}
+      SPARK_MODE: master
+      SPARK_MASTER_HOST: spark-master-2.production.local
+      SPARK_MASTER_PORT: ${SPARK_MASTER_PORT}
+      SPARK_MASTER_WEBUI_PORT: ${SPARK_MASTER_WEBUI_PORT}
+      SPARK_DAEMON_JAVA_OPTS: |
+        -Dspark.deploy.recoveryMode=${SPARK_RECOVERY_MODE}
+        -Dspark.deploy.zookeeper.url=${SPARK_ZK_URL}
+        -Dspark.deploy.zookeeper.dir=${SPARK_ZK_DIR}
+        -Dspark.eventLog.enabled=${SPARK_EVENTLOG_ENABLED}
+        -Dspark.eventLog.dir=${SPARK_EVENTLOG_DIR}
+        -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR}
+        -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED:-false}
+        -Dspark.authenticate.secret=${SPARK_RPC_AUTHENTICATION_SECRET}
+      SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY}
+      SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
+      SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    volumes:
+      - spark-events:/opt/spark/spark-events
+      - /path/to/spark/jars:/opt/spark/jars  # Use shared storage
+      - /path/to/spark/apps:/opt/spark/apps  # Use shared storage
     depends_on:
       - zookeeper-1
       - zookeeper-2
       - zookeeper-3
+    command: >
+      bash -c "
+        echo 'Waiting for ZooKeeper to be ready...';
+        sleep 10;
+        mkdir -p /opt/spark/spark-events;
+        echo 'Starting Spark Master 2...';
+        /opt/spark/sbin/start-master.sh;
+        tail -f /opt/spark/logs/*"
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == server2
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
+
+  spark-master-3:
+    image: ${SPARK_IMAGE}
+    container_name: spark-master-3
+    hostname: spark-master-3.production.local
+    networks:
+      - spark-network
+    ports:
+      - "7079:7077"
+      - "8082:8080"
+    environment:
+      SPARK_MODE: master
+      SPARK_MASTER_HOST: spark-master-3.production.local
+      SPARK_MASTER_PORT: ${SPARK_MASTER_PORT}
+      SPARK_MASTER_WEBUI_PORT: ${SPARK_MASTER_WEBUI_PORT}
+      SPARK_DAEMON_JAVA_OPTS: |
+        -Dspark.deploy.recoveryMode=${SPARK_RECOVERY_MODE}
+        -Dspark.deploy.zookeeper.url=${SPARK_ZK_URL}
+        -Dspark.deploy.zookeeper.dir=${SPARK_ZK_DIR}
+        -Dspark.eventLog.enabled=${SPARK_EVENTLOG_ENABLED}
+        -Dspark.eventLog.dir=${SPARK_EVENTLOG_DIR}
+        -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR}
+        -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED:-false}
+        -Dspark.authenticate.secret=${SPARK_RPC_AUTHENTICATION_SECRET}
+      SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY}
+      SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
+      SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    volumes:
+      - spark-events:/opt/spark/spark-events
+      - /path/to/spark/jars:/opt/spark/jars  # Use shared storage
+      - /path/to/spark/apps:/opt/spark/apps  # Use shared storage
+    depends_on:
+      - zookeeper-1
+      - zookeeper-2
+      - zookeeper-3
+    command: >
+      bash -c "
+        echo 'Waiting for ZooKeeper to be ready...';
+        sleep 10;
+        mkdir -p /opt/spark/spark-events;
+        echo 'Starting Spark Master 3...';
+        /opt/spark/sbin/start-master.sh;
+        tail -f /opt/spark/logs/*"
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == server3
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
+
+  # ============================================
+  # Spark Worker Nodes
+  # ============================================
+  spark-worker-1:
+    image: ${SPARK_IMAGE}
+    container_name: spark-worker-1
+    hostname: spark-worker-1.production.local
+    networks:
+      - spark-network
+    ports:
+      - "8083:8081"
+    environment:
+      SPARK_MODE: worker
+      SPARK_WORKER_HOST: spark-worker-1.production.local
+      SPARK_MASTER_URL: ${SPARK_MASTER_URL}
+      SPARK_WORKER_CORES: ${SPARK_WORKER_CORES}
+      SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY}
+      SPARK_WORKER_WEBUI_PORT: ${SPARK_WORKER_WEBUI_PORT}
+      SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
+      SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    volumes:
+      - /path/to/spark/jars:/opt/spark/jars  # Use shared storage
+    depends_on:
+      - spark-master-1
+      - spark-master-2
+      - spark-master-3
+    command: >
+      bash -c "
+        echo 'Waiting for Spark Masters...';
+        sleep 15;
+        echo 'Starting Spark Worker 1...';
+        /opt/spark/sbin/start-worker.sh ${SPARK_MASTER_URL};
+        tail -f /opt/spark/logs/*"
+    restart: always
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == worker1
+      resources:
+        limits:
+          cpus: '16'
+          memory: 64G
+        reservations:
+          cpus: '8'
+          memory: 32G
+
+  spark-worker-2:
+    image: ${SPARK_IMAGE}
+    container_name: spark-worker-2
+    hostname: spark-worker-2.production.local
+    networks:
+      - spark-network
+    ports:
+      - "8084:8081"
+    environment:
+      SPARK_MODE: worker
+      SPARK_WORKER_HOST: spark-worker-2.production.local
+      SPARK_MASTER_URL: ${SPARK_MASTER_URL}
+      SPARK_WORKER_CORES: ${SPARK_WORKER_CORES}
+      SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY}
+      SPARK_WORKER_WEBUI_PORT: ${SPARK_WORKER_WEBUI_PORT}
+      SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
+      SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    volumes:
+      - /path/to/spark/jars:/opt/spark/jars  # Use shared storage
+    depends_on:
+      - spark-master-1
+      - spark-master-2
+      - spark-master-3
+    command: >
+      bash -c "
+        echo 'Waiting for Spark Masters...';
+        sleep 15;
+        echo 'Starting Spark Worker 2...';
+        /opt/spark/sbin/start-worker.sh ${SPARK_MASTER_URL};
+        tail -f /opt/spark/logs/*"
+    restart: always
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == worker2
+      resources:
+        limits:
+          cpus: '16'
+          memory: 64G
+        reservations:
+          cpus: '8'
+          memory: 32G
+
+  # ============================================
+  # Spark History Server
+  # ============================================
+  spark-history:
+    image: ${SPARK_IMAGE}
+    container_name: spark-history
+    hostname: spark-history.production.local
+    networks:
+      - spark-network
+    ports:
+      - "18080:18080"
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+      SPARK_HISTORY_OPTS: |
+        -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR}
+        -Dspark.history.retainedApplications=${SPARK_HISTORY_RETAINED_APP}
+        -Dspark.history.ui.port=${SPARK_HISTORY_UI_PORT}
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    volumes:
+      - spark-events:/opt/spark/spark-events:ro
+    depends_on:
+      - spark-master-1
+      - spark-master-2
+      - spark-master-3
+    command: >
+      bash -c "
+        echo 'Waiting for Spark cluster to generate event logs...';
+        sleep 20;
+        mkdir -p /opt/spark/spark-events;
+        echo 'Starting Spark History Server...';
+        /opt/spark/sbin/start-history-server.sh;
+        tail -f /opt/spark/logs/*"
     restart: always
     deploy:
       placement:
@@ -179,9 +605,19 @@ services:
         limits:
           cpus: '4'
           memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
+```
 
-  # Similar configuration for spark-master-2, spark-master-3
-  # and workers...
+### Step 3: Deploy on Docker Swarm
+
+```bash
+# Initialize Swarm on manager node
+docker swarm init --advertise-addr <MANAGER-IP>
+
+# Deploy stack
+docker stack deploy -c docker-compose.prod.yml spark-ha
 ```
 
 ### Step 3: Deploy on Docker Swarm
@@ -194,7 +630,7 @@ docker swarm init --advertise-addr <MANAGER-IP>
 docker swarm join --token <TOKEN> <MANAGER-IP>:2377
 
 # Create overlay network
-docker network create --driver overlay --attachable spark-net
+docker network create --driver overlay --attachable spark-network
 
 # Deploy stack
 docker stack deploy -c docker-compose.prod.yml spark-ha
