@@ -127,20 +127,31 @@ services:
       - "8080:8080"
     environment:
       SPARK_MODE: master
+      SPARK_NO_DAEMONIZE: "true"
+      SPARK_PUBLIC_DNS: spark-master-1
       SPARK_MASTER_HOST: spark-master-1
       SPARK_MASTER_PORT: ${SPARK_MASTER_PORT}
       SPARK_MASTER_WEBUI_PORT: ${SPARK_MASTER_WEBUI_PORT}
-      SPARK_DAEMON_JAVA_OPTS: |
-        -Dspark.deploy.recoveryMode=${SPARK_RECOVERY_MODE}
-        -Dspark.deploy.zookeeper.url=${SPARK_ZK_URL}
-        -Dspark.deploy.zookeeper.dir=${SPARK_ZK_DIR}
-        -Dspark.eventLog.enabled=${SPARK_EVENTLOG_ENABLED}
-        -Dspark.eventLog.dir=${SPARK_EVENTLOG_DIR}
-        -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR}
+      SPARK_DAEMON_MEMORY: ${SPARK_DAEMON_MEMORY}
+      SPARK_DAEMON_JAVA_OPTS: "
+        -Dspark.deploy.recoveryMode=${SPARK_RECOVERY_MODE} \
+        -Dspark.deploy.zookeeper.url=${SPARK_ZK_URL} \
+        -Dspark.deploy.zookeeper.dir=${SPARK_ZK_DIR} \
+        -Dspark.eventLog.enabled=${SPARK_EVENTLOG_ENABLED} \
+        -Dspark.eventLog.dir=${SPARK_EVENTLOG_DIR} \
+        -Dspark.eventLog.rolling.enabled=${SPARK_EVENTLOG_ROLLING_ENABLED} \
+        -Dspark.eventLog.rolling.maxFileSize=${SPARK_EVENTLOG_ROLLING_MAX_FILE_SIZE} \
+        -Dspark.eventLog.rolling.maxRetainedFiles=${SPARK_EVENTLOG_ROLLING_MAX_RETAINED_FILES} \
+        -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR} \
+        -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED} \
+        -Dspark.authenticate.secret=${SPARK_RPC_AUTHENTICATION_SECRET} \
+        -Dspark.network.crypto.enabled=${SPARK_RPC_ENCRYPTION_ENABLED} \
+        -XX:+UseG1GC
+        "
       SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY}
       SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
       SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
-#      TZ: Asia/Ho_Chi_Minh
+      TZ: Asia/Ho_Chi_Minh
 #      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
 #      CLICKHOUSE_HOST: ${CLICKHOUSE_HOST}
 #      CLICKHOUSE_PORT: ${CLICKHOUSE_PORT}
@@ -154,12 +165,11 @@ services:
       - zookeeper-3
     command: >
       bash -c "
-        echo 'Waiting for ZooKeeper to be ready...';
+        echo 'Waiting for ZooKeeper...';
         sleep 10;
         mkdir -p /opt/spark/spark-events;
-        echo 'Starting Spark Master 1...';
-        /opt/spark/sbin/start-master.sh;
-        tail -f /opt/spark/logs/*"
+        /opt/spark/sbin/start-master.sh
+      "
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
@@ -178,20 +188,31 @@ services:
       - "8081:8080"
     environment:
       SPARK_MODE: master
+      SPARK_NO_DAEMONIZE: "true"
+      SPARK_PUBLIC_DNS: spark-master-2
       SPARK_MASTER_HOST: spark-master-2
       SPARK_MASTER_PORT: ${SPARK_MASTER_PORT}
       SPARK_MASTER_WEBUI_PORT: ${SPARK_MASTER_WEBUI_PORT}
-      SPARK_DAEMON_JAVA_OPTS: |
-        -Dspark.deploy.recoveryMode=${SPARK_RECOVERY_MODE}
-        -Dspark.deploy.zookeeper.url=${SPARK_ZK_URL}
-        -Dspark.deploy.zookeeper.dir=${SPARK_ZK_DIR}
-        -Dspark.eventLog.enabled=${SPARK_EVENTLOG_ENABLED}
-        -Dspark.eventLog.dir=${SPARK_EVENTLOG_DIR}
-        -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR}
+      SPARK_DAEMON_MEMORY: ${SPARK_DAEMON_MEMORY}
+      SPARK_DAEMON_JAVA_OPTS: "
+        -Dspark.deploy.recoveryMode=${SPARK_RECOVERY_MODE} \
+        -Dspark.deploy.zookeeper.url=${SPARK_ZK_URL} \
+        -Dspark.deploy.zookeeper.dir=${SPARK_ZK_DIR} \
+        -Dspark.eventLog.enabled=${SPARK_EVENTLOG_ENABLED} \
+        -Dspark.eventLog.dir=${SPARK_EVENTLOG_DIR} \
+        -Dspark.eventLog.rolling.enabled=${SPARK_EVENTLOG_ROLLING_ENABLED} \
+        -Dspark.eventLog.rolling.maxFileSize=${SPARK_EVENTLOG_ROLLING_MAX_FILE_SIZE} \
+        -Dspark.eventLog.rolling.maxRetainedFiles=${SPARK_EVENTLOG_ROLLING_MAX_RETAINED_FILES} \
+        -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR} \
+        -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED} \
+        -Dspark.authenticate.secret=${SPARK_RPC_AUTHENTICATION_SECRET} \
+        -Dspark.network.crypto.enabled=${SPARK_RPC_ENCRYPTION_ENABLED} \
+        -XX:+UseG1GC
+        "
       SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY}
       SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
       SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
-#      TZ: Asia/Ho_Chi_Minh
+      TZ: Asia/Ho_Chi_Minh
 #      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
 #      CLICKHOUSE_HOST: ${CLICKHOUSE_HOST}
 #      CLICKHOUSE_PORT: ${CLICKHOUSE_PORT}
@@ -205,12 +226,11 @@ services:
       - zookeeper-3
     command: >
       bash -c "
-        echo 'Waiting for ZooKeeper to be ready...';
+        echo 'Waiting for ZooKeeper...';
         sleep 10;
         mkdir -p /opt/spark/spark-events;
-        echo 'Starting Spark Master 2...';
-        /opt/spark/sbin/start-master.sh;
-        tail -f /opt/spark/logs/*"
+        /opt/spark/sbin/start-master.sh
+      "
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081"]
@@ -229,20 +249,31 @@ services:
       - "8082:8080"
     environment:
       SPARK_MODE: master
+      SPARK_NO_DAEMONIZE: "true"
+      SPARK_PUBLIC_DNS: spark-master-3
       SPARK_MASTER_HOST: spark-master-3
       SPARK_MASTER_PORT: ${SPARK_MASTER_PORT}
       SPARK_MASTER_WEBUI_PORT: ${SPARK_MASTER_WEBUI_PORT}
-      SPARK_DAEMON_JAVA_OPTS: |
-        -Dspark.deploy.recoveryMode=${SPARK_RECOVERY_MODE}
-        -Dspark.deploy.zookeeper.url=${SPARK_ZK_URL}
-        -Dspark.deploy.zookeeper.dir=${SPARK_ZK_DIR}
-        -Dspark.eventLog.enabled=${SPARK_EVENTLOG_ENABLED}
-        -Dspark.eventLog.dir=${SPARK_EVENTLOG_DIR}
-        -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR}
+      SPARK_DAEMON_MEMORY: ${SPARK_DAEMON_MEMORY}
+      SPARK_DAEMON_JAVA_OPTS: "
+        -Dspark.deploy.recoveryMode=${SPARK_RECOVERY_MODE} \
+        -Dspark.deploy.zookeeper.url=${SPARK_ZK_URL} \
+        -Dspark.deploy.zookeeper.dir=${SPARK_ZK_DIR} \
+        -Dspark.eventLog.enabled=${SPARK_EVENTLOG_ENABLED} \
+        -Dspark.eventLog.dir=${SPARK_EVENTLOG_DIR} \
+        -Dspark.eventLog.rolling.enabled=${SPARK_EVENTLOG_ROLLING_ENABLED} \
+        -Dspark.eventLog.rolling.maxFileSize=${SPARK_EVENTLOG_ROLLING_MAX_FILE_SIZE} \
+        -Dspark.eventLog.rolling.maxRetainedFiles=${SPARK_EVENTLOG_ROLLING_MAX_RETAINED_FILES} \
+        -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR} \
+        -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED} \
+        -Dspark.authenticate.secret=${SPARK_RPC_AUTHENTICATION_SECRET} \
+        -Dspark.network.crypto.enabled=${SPARK_RPC_ENCRYPTION_ENABLED} \
+        -XX:+UseG1GC
+        "
       SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY}
       SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
       SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
-#      TZ: Asia/Ho_Chi_Minh
+      TZ: Asia/Ho_Chi_Minh
 #      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
 #      CLICKHOUSE_HOST: ${CLICKHOUSE_HOST}
 #      CLICKHOUSE_PORT: ${CLICKHOUSE_PORT}
@@ -256,12 +287,11 @@ services:
       - zookeeper-3
     command: >
       bash -c "
-        echo 'Waiting for ZooKeeper to be ready...';
+        echo 'Waiting for ZooKeeper...';
         sleep 10;
         mkdir -p /opt/spark/spark-events;
-        echo 'Starting Spark Master 3...';
-        /opt/spark/sbin/start-master.sh;
-        tail -f /opt/spark/logs/*"
+        /opt/spark/sbin/start-master.sh
+      "
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8082"]
@@ -282,16 +312,26 @@ services:
       - "8083:8081"
     environment:
       SPARK_MODE: worker
+      SPARK_PUBLIC_DNS: spark-worker-1
       SPARK_WORKER_HOST: spark-worker-1
+      SPARK_NO_DAEMONIZE: ${SPARK_NO_DAEMONIZE}
+      SPARK_DAEMON_MEMORY: ${SPARK_DAEMON_MEMORY}
       SPARK_MASTER_URL: ${SPARK_MASTER_URL}
       SPARK_WORKER_CORES: ${SPARK_WORKER_CORES}
       SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY}
       SPARK_WORKER_WEBUI_PORT: ${SPARK_WORKER_WEBUI_PORT}
-      SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
-      SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
-#      TZ: Asia/Ho_Chi_Minh
+      SPARK_LOCAL_DIRS: ${SPARK_LOCAL_DIRS}
+      SPARK_DRIVER_EXTRA_CLASSPATH: ${SPARK_DRIVER_EXTRA_CLASSPATH}
+      SPARK_EXECUTOR_EXTRA_CLASSPATH: ${SPARK_EXECUTOR_EXTRA_CLASSPATH}
+      SPARK_DAEMON_JAVA_OPTS: "
+        -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED} \
+        -Dspark.authenticate.secret=${SPARK_RPC_AUTHENTICATION_SECRET} \
+        -Dspark.network.crypto.enabled=${SPARK_RPC_ENCRYPTION_ENABLED}
+      "
+      TZ: Asia/Ho_Chi_Minh
     volumes:
       - ./spark/jars:/opt/spark/jars
+      - ./spark/worker-data:/opt/spark/work-dir
     depends_on:
       - spark-master-1
       - spark-master-2
@@ -300,9 +340,8 @@ services:
       bash -c "
         echo 'Waiting for Spark Masters...';
         sleep 15;
-        echo 'Starting Spark Worker 1...';
-        /opt/spark/sbin/start-worker.sh ${SPARK_MASTER_URL};
-        tail -f /opt/spark/logs/*"
+        /opt/spark/sbin/start-worker.sh ${SPARK_MASTER_URL}
+      "
     restart: unless-stopped
 
   spark-worker-2:
@@ -315,16 +354,26 @@ services:
       - "8084:8081"
     environment:
       SPARK_MODE: worker
+      SPARK_PUBLIC_DNS: spark-worker-2
       SPARK_WORKER_HOST: spark-worker-2
+      SPARK_NO_DAEMONIZE: ${SPARK_NO_DAEMONIZE}
+      SPARK_DAEMON_MEMORY: ${SPARK_DAEMON_MEMORY}
       SPARK_MASTER_URL: ${SPARK_MASTER_URL}
       SPARK_WORKER_CORES: ${SPARK_WORKER_CORES}
       SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY}
       SPARK_WORKER_WEBUI_PORT: ${SPARK_WORKER_WEBUI_PORT}
-      SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
-      SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
-#      TZ: Asia/Ho_Chi_Minh
+      SPARK_LOCAL_DIRS: ${SPARK_LOCAL_DIRS}
+      SPARK_DRIVER_EXTRA_CLASSPATH: ${SPARK_DRIVER_EXTRA_CLASSPATH}
+      SPARK_EXECUTOR_EXTRA_CLASSPATH: ${SPARK_EXECUTOR_EXTRA_CLASSPATH}
+      SPARK_DAEMON_JAVA_OPTS: "
+        -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED} \
+        -Dspark.authenticate.secret=${SPARK_RPC_AUTHENTICATION_SECRET} \
+        -Dspark.network.crypto.enabled=${SPARK_RPC_ENCRYPTION_ENABLED}
+      "
+      TZ: Asia/Ho_Chi_Minh
     volumes:
       - ./spark/jars:/opt/spark/jars
+      - ./spark/worker-data:/opt/spark/work-dir
     depends_on:
       - spark-master-1
       - spark-master-2
@@ -333,9 +382,8 @@ services:
       bash -c "
         echo 'Waiting for Spark Masters...';
         sleep 15;
-        echo 'Starting Spark Worker 2...';
-        /opt/spark/sbin/start-worker.sh ${SPARK_MASTER_URL};
-        tail -f /opt/spark/logs/*"
+        /opt/spark/sbin/start-worker.sh ${SPARK_MASTER_URL}
+      "
     restart: unless-stopped
 
   spark-worker-3:
@@ -348,16 +396,26 @@ services:
       - "8085:8081"
     environment:
       SPARK_MODE: worker
+      SPARK_PUBLIC_DNS: spark-worker-3
       SPARK_WORKER_HOST: spark-worker-3
+      SPARK_NO_DAEMONIZE: ${SPARK_NO_DAEMONIZE}
+      SPARK_DAEMON_MEMORY: ${SPARK_DAEMON_MEMORY}
       SPARK_MASTER_URL: ${SPARK_MASTER_URL}
       SPARK_WORKER_CORES: ${SPARK_WORKER_CORES}
       SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY}
       SPARK_WORKER_WEBUI_PORT: ${SPARK_WORKER_WEBUI_PORT}
-      SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
-      SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
-#      TZ: Asia/Ho_Chi_Minh
+      SPARK_LOCAL_DIRS: ${SPARK_LOCAL_DIRS}
+      SPARK_DRIVER_EXTRA_CLASSPATH: ${SPARK_DRIVER_EXTRA_CLASSPATH}
+      SPARK_EXECUTOR_EXTRA_CLASSPATH: ${SPARK_EXECUTOR_EXTRA_CLASSPATH}
+      SPARK_DAEMON_JAVA_OPTS: "
+        -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED} \
+        -Dspark.authenticate.secret=${SPARK_RPC_AUTHENTICATION_SECRET} \
+        -Dspark.network.crypto.enabled=${SPARK_RPC_ENCRYPTION_ENABLED}
+      "
+      TZ: Asia/Ho_Chi_Minh
     volumes:
       - ./spark/jars:/opt/spark/jars
+      - ./spark/worker-data:/opt/spark/work-dir
     depends_on:
       - spark-master-1
       - spark-master-2
@@ -366,9 +424,8 @@ services:
       bash -c "
         echo 'Waiting for Spark Masters...';
         sleep 15;
-        echo 'Starting Spark Worker 3...';
-        /opt/spark/sbin/start-worker.sh ${SPARK_MASTER_URL};
-        tail -f /opt/spark/logs/*"
+        /opt/spark/sbin/start-worker.sh ${SPARK_MASTER_URL}
+      "
     restart: unless-stopped
 
   # ============================================
@@ -383,12 +440,13 @@ services:
     ports:
       - "18080:18080"
     environment:
-      SPARK_NO_DAEMONIZE: "true"
-      SPARK_HISTORY_OPTS: |
+      SPARK_NO_DAEMONIZE: ${SPARK_NO_DAEMONIZE}
+      SPARK_PUBLIC_DNS: spark-history
+      SPARK_HISTORY_OPTS: >
         -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR}
         -Dspark.history.retainedApplications=${SPARK_HISTORY_RETAINED_APP}
         -Dspark.history.ui.port=${SPARK_HISTORY_UI_PORT}
-#      TZ: Asia/Ho_Chi_Minh
+      TZ: Asia/Ho_Chi_Minh
     volumes:
       - ./spark-events:/opt/spark/spark-events:ro
     depends_on:
@@ -401,6 +459,6 @@ services:
         sleep 20;
         mkdir -p /opt/spark/spark-events;
         echo 'Starting Spark History Server...';
-        /opt/spark/sbin/start-history-server.sh;
-        tail -f /opt/spark/logs/*"
+        /opt/spark/sbin/start-history-server.sh
+      "
     restart: unless-stopped
