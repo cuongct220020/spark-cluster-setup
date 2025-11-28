@@ -216,8 +216,7 @@ Thumbs.db
 *.backup
 
 # ZooKeeper data (if mounted locally)
-zk-data/
-zookeeper-*/
+zk*/
 
 # Spark logs (if mounted locally)
-spark-logs/
+spark-events/

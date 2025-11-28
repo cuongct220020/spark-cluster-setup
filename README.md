@@ -2,7 +2,7 @@
 
 Cụm Spark Standalone với High Availability sử dụng ZooKeeper cho master election và failover tự động.
 
-## 🏗️ Kiến trúc
+## Kiến trúc
 
 ### ZooKeeper Cluster (3 nodes)
 - `zookeeper-1`: Port 2181
@@ -19,7 +19,7 @@ Cụm Spark Standalone với High Availability sử dụng ZooKeeper cho master 
 - `spark-worker-2`: Port 8084 (Web UI)
 - `spark-worker-3`: Port 8085 (Web UI)
 
-## 🚀 Khởi động cụm
+## Khởi động cụm
 
 ```bash
 # Khởi động toàn bộ cluster
@@ -32,7 +32,7 @@ docker-compose logs -f
 docker-compose ps
 ```
 
-## 🔍 Kiểm tra trạng thái
+## Kiểm tra trạng thái
 
 ### 1. Kiểm tra ZooKeeper Cluster
 
@@ -62,7 +62,7 @@ Chỉ có **1 Master** hiển thị status **ALIVE** (active), các Master khác
 
 Workers chỉ hiển thị trên Web UI của **Active Master**.
 
-## 📝 Submit Spark Application
+## Submit Spark Application
 
 ### Cú pháp submit với HA
 
@@ -95,7 +95,7 @@ docker exec -it spark-master-1 spark-submit \
   /path/to/your/app.jar
 ```
 
-## 🧪 Test Failover
+## Test Failover
 
 ### Test 1: Kill Active Master
 
@@ -143,7 +143,7 @@ docker start spark-master-1
 # Master 1 sẽ khởi động lại ở chế độ STANDBY
 ```
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Kiểm tra logs chi tiết
 
@@ -188,7 +188,7 @@ docker-compose down -v
 docker-compose up -d
 ```
 
-## ⚙️ Cấu hình tùy chỉnh
+## Cấu hình tùy chỉnh
 
 ### Thay đổi tài nguyên Worker
 
@@ -196,8 +196,8 @@ Chỉnh sửa trong `docker-compose.yml`:
 
 ```yaml
 environment:
-  - SPARK_WORKER_CORES=4      # Tăng số cores
-  - SPARK_WORKER_MEMORY=4G    # Tăng memory
+  - SPARK_WORKER_CORES= ${SPARK_WORKER_CORES}     # Tăng số cores
+  - SPARK_WORKER_MEMORY= ${SPARK_WORKER_MEMORY}   # Tăng memory
 ```
 
 ### Thêm Workers
@@ -221,7 +221,7 @@ Uncomment các dòng security trong file docker-compose:
 # - SPARK_RPC_ENCRYPTION_ENABLED=yes
 ```
 
-## 📊 Monitoring
+## Monitoring
 
 ### ZooKeeper Metrics
 
@@ -244,7 +244,7 @@ Truy cập Web UI:
 - Worker 2: http://localhost:8084
 - Worker 3: http://localhost:8085
 
-## 🛑 Dừng cluster
+## Dừng cluster
 
 ```bash
 # Dừng tất cả services
