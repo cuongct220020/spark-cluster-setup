@@ -44,11 +44,11 @@ services:
       - zk1-log:/datalog
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok && echo stat | nc localhost 2181 | grep -q Mode"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 20s
 
   zookeeper-2:
     image: ${ZOO_IMAGE}
@@ -77,11 +77,11 @@ services:
       - zk2-log:/datalog
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok && echo stat | nc localhost 2181 | grep -q Mode"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 20s
 
   zookeeper-3:
     image: ${ZOO_IMAGE}
@@ -110,11 +110,11 @@ services:
       - zk3-log:/datalog
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok && echo stat | nc localhost 2181 | grep -q Mode"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 20s
 
   # ============================================
   # Spark Master Nodes (HA with ZooKeeper)
@@ -136,18 +136,16 @@ services:
       SPARK_MASTER_HOST: spark-master-1
       SPARK_MASTER_PORT: ${SPARK_MASTER_PORT}
       SPARK_MASTER_WEBUI_PORT: ${SPARK_MASTER_WEBUI_PORT}
-      SPARK_DAEMON_JAVA_OPTS: >-
+      SPARK_MASTER_OPTS: >-
         -Dspark.deploy.recoveryMode=${SPARK_RECOVERY_MODE}
         -Dspark.deploy.zookeeper.url=${SPARK_ZK_URL}
         -Dspark.deploy.zookeeper.dir=${SPARK_ZK_DIR}
         -Dspark.eventLog.enabled=${SPARK_EVENTLOG_ENABLED}
         -Dspark.eventLog.dir=${SPARK_EVENTLOG_DIR}
-        -Dspark.eventLog.rolling.enabled=${SPARK_EVENTLOG_ROLLING_ENABLED}
-        -Dspark.eventLog.rolling.maxFileSize=${SPARK_EVENTLOG_ROLLING_MAX_FILE_SIZE}
-        -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR}
         -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED}
         -Dspark.authenticate.secret=${SPARK_RPC_AUTHENTICATION_SECRET}
         -Dspark.network.crypto.enabled=${SPARK_RPC_ENCRYPTION_ENABLED}
+      SPARK_DAEMON_JAVA_OPTS: >-
         -XX:+UseG1GC
         -XX:+UnlockExperimentalVMOptions
         -XX:MaxGCPauseMillis=200
@@ -177,10 +175,10 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
   spark-master-2:
     image: ${SPARK_IMAGE}
@@ -199,18 +197,16 @@ services:
       SPARK_MASTER_HOST: spark-master-2
       SPARK_MASTER_PORT: ${SPARK_MASTER_PORT}
       SPARK_MASTER_WEBUI_PORT: ${SPARK_MASTER_WEBUI_PORT}
-      SPARK_DAEMON_JAVA_OPTS: >-
+      SPARK_MASTER_OPTS: >-
         -Dspark.deploy.recoveryMode=${SPARK_RECOVERY_MODE}
         -Dspark.deploy.zookeeper.url=${SPARK_ZK_URL}
         -Dspark.deploy.zookeeper.dir=${SPARK_ZK_DIR}
         -Dspark.eventLog.enabled=${SPARK_EVENTLOG_ENABLED}
         -Dspark.eventLog.dir=${SPARK_EVENTLOG_DIR}
-        -Dspark.eventLog.rolling.enabled=${SPARK_EVENTLOG_ROLLING_ENABLED}
-        -Dspark.eventLog.rolling.maxFileSize=${SPARK_EVENTLOG_ROLLING_MAX_FILE_SIZE}
-        -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR}
         -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED}
         -Dspark.authenticate.secret=${SPARK_RPC_AUTHENTICATION_SECRET}
         -Dspark.network.crypto.enabled=${SPARK_RPC_ENCRYPTION_ENABLED}
+      SPARK_DAEMON_JAVA_OPTS: >-
         -XX:+UseG1GC
         -XX:+UnlockExperimentalVMOptions
         -XX:MaxGCPauseMillis=200
@@ -240,10 +236,10 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
   spark-master-3:
     image: ${SPARK_IMAGE}
@@ -262,18 +258,16 @@ services:
       SPARK_MASTER_HOST: spark-master-3
       SPARK_MASTER_PORT: ${SPARK_MASTER_PORT}
       SPARK_MASTER_WEBUI_PORT: ${SPARK_MASTER_WEBUI_PORT}
-      SPARK_DAEMON_JAVA_OPTS: >-
+      SPARK_MASTER_OPTS: >-
         -Dspark.deploy.recoveryMode=${SPARK_RECOVERY_MODE}
         -Dspark.deploy.zookeeper.url=${SPARK_ZK_URL}
         -Dspark.deploy.zookeeper.dir=${SPARK_ZK_DIR}
         -Dspark.eventLog.enabled=${SPARK_EVENTLOG_ENABLED}
         -Dspark.eventLog.dir=${SPARK_EVENTLOG_DIR}
-        -Dspark.eventLog.rolling.enabled=${SPARK_EVENTLOG_ROLLING_ENABLED}
-        -Dspark.eventLog.rolling.maxFileSize=${SPARK_EVENTLOG_ROLLING_MAX_FILE_SIZE}
-        -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR}
         -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED}
         -Dspark.authenticate.secret=${SPARK_RPC_AUTHENTICATION_SECRET}
         -Dspark.network.crypto.enabled=${SPARK_RPC_ENCRYPTION_ENABLED}
+      SPARK_DAEMON_JAVA_OPTS: >-
         -XX:+UseG1GC
         -XX:+UnlockExperimentalVMOptions
         -XX:MaxGCPauseMillis=200
@@ -303,10 +297,10 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
   # ============================================
   # Spark Worker Nodes
@@ -330,10 +324,11 @@ services:
       SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY}
       SPARK_WORKER_WEBUI_PORT: ${SPARK_WORKER_WEBUI_PORT}
       SPARK_LOCAL_DIRS: ${SPARK_LOCAL_DIRS}
-      SPARK_DAEMON_JAVA_OPTS: >-
+      SPARK_WORKER_OPTS: >-
         -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED}
         -Dspark.authenticate.secret=${SPARK_RPC_AUTHENTICATION_SECRET}
         -Dspark.network.crypto.enabled=${SPARK_RPC_ENCRYPTION_ENABLED}
+      SPARK_DAEMON_JAVA_OPTS: >-
         -XX:+UseG1GC
         -XX:+UnlockExperimentalVMOptions
         -XX:MaxGCPauseMillis=200
@@ -384,10 +379,11 @@ services:
       SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY}
       SPARK_WORKER_WEBUI_PORT: ${SPARK_WORKER_WEBUI_PORT}
       SPARK_LOCAL_DIRS: ${SPARK_LOCAL_DIRS}
-      SPARK_DAEMON_JAVA_OPTS: >-
+      SPARK_WORKER_OPTS: >-
         -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED}
         -Dspark.authenticate.secret=${SPARK_RPC_AUTHENTICATION_SECRET}
         -Dspark.network.crypto.enabled=${SPARK_RPC_ENCRYPTION_ENABLED}
+      SPARK_DAEMON_JAVA_OPTS: >-
         -XX:+UseG1GC
         -XX:+UnlockExperimentalVMOptions
         -XX:MaxGCPauseMillis=200
@@ -438,10 +434,11 @@ services:
       SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY}
       SPARK_WORKER_WEBUI_PORT: ${SPARK_WORKER_WEBUI_PORT}
       SPARK_LOCAL_DIRS: ${SPARK_LOCAL_DIRS}
-      SPARK_DAEMON_JAVA_OPTS: >-
+      SPARK_WORKER_OPTS: >-
         -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED}
         -Dspark.authenticate.secret=${SPARK_RPC_AUTHENTICATION_SECRET}
         -Dspark.network.crypto.enabled=${SPARK_RPC_ENCRYPTION_ENABLED}
+      SPARK_DAEMON_JAVA_OPTS: >-
         -XX:+UseG1GC
         -XX:+UnlockExperimentalVMOptions
         -XX:MaxGCPauseMillis=200
