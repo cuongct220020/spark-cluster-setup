@@ -169,7 +169,6 @@ services:
     command: >
       bash -c "
         echo 'Waiting for ZooKeeper cluster to be ready...';
-        sleep 15;
         mkdir -p /opt/spark/spark-events;
         echo 'Starting Spark Master 1 with HA...';
         /opt/spark/sbin/start-master.sh;
@@ -233,7 +232,6 @@ services:
     command: >
       bash -c "
         echo 'Waiting for ZooKeeper cluster to be ready...';
-        sleep 15;
         mkdir -p /opt/spark/spark-events;
         echo 'Starting Spark Master 2 with HA...';
         /opt/spark/sbin/start-master.sh;
@@ -297,7 +295,6 @@ services:
     command: >
       bash -c "
         echo 'Waiting for ZooKeeper cluster to be ready...';
-        sleep 15;
         mkdir -p /opt/spark/spark-events;
         echo 'Starting Spark Master 3 with HA...';
         /opt/spark/sbin/start-master.sh;
@@ -356,7 +353,6 @@ services:
     command: >
       bash -c "
         echo 'Waiting for Spark Masters HA to be ready...';
-        sleep 5;
         echo 'Starting Spark Worker 1...';
         /opt/spark/sbin/start-worker.sh ${SPARK_MASTER_URL};
         tail -f /opt/spark/logs/*
@@ -411,7 +407,6 @@ services:
     command: >
       bash -c "
         echo 'Waiting for Spark Masters HA to be ready...';
-        sleep 5;
         echo 'Starting Spark Worker 2...';
         /opt/spark/sbin/start-worker.sh ${SPARK_MASTER_URL};
         tail -f /opt/spark/logs/*
@@ -466,7 +461,6 @@ services:
     command: >
       bash -c "
         echo 'Waiting for Spark Masters HA to be ready...';
-        sleep 5;
         echo 'Starting Spark Worker 3...';
         /opt/spark/sbin/start-worker.sh ${SPARK_MASTER_URL};
         tail -f /opt/spark/logs/*
@@ -514,7 +508,6 @@ services:
     command: >
       bash -c "
         echo 'Waiting for event logs...';
-        sleep 30;
         mkdir -p /opt/spark/spark-events;
         echo 'Starting Spark History Server...';
         /opt/spark/sbin/start-history-server.sh;
