@@ -38,7 +38,7 @@ services:
       ZOO_MAX_SESSION_TIMEOUT: ${ZOO_MAX_SESSION_TIMEOUT}
       ZOO_MIN_SESSION_TIMEOUT: ${ZOO_MIN_SESSION_TIMEOUT}
       ZOO_CLIENT_PORT: ${ZOO_CLIENT_PORT}
-      TZ: Asia/Ho_Chi_Minh
+#      TZ: Asia/Ho_Chi_Minh
     volumes:
       - zk1-data:/data
       - zk1-log:/datalog
@@ -71,7 +71,7 @@ services:
       ZOO_MAX_SESSION_TIMEOUT: ${ZOO_MAX_SESSION_TIMEOUT}
       ZOO_MIN_SESSION_TIMEOUT: ${ZOO_MIN_SESSION_TIMEOUT}
       ZOO_CLIENT_PORT: ${ZOO_CLIENT_PORT}
-      TZ: Asia/Ho_Chi_Minh
+#      TZ: Asia/Ho_Chi_Minh
     volumes:
       - zk2-data:/data
       - zk2-log:/datalog
@@ -104,7 +104,7 @@ services:
       ZOO_MAX_SESSION_TIMEOUT: ${ZOO_MAX_SESSION_TIMEOUT}
       ZOO_MIN_SESSION_TIMEOUT: ${ZOO_MIN_SESSION_TIMEOUT}
       ZOO_CLIENT_PORT: ${ZOO_CLIENT_PORT}
-      TZ: Asia/Ho_Chi_Minh
+#      TZ: Asia/Ho_Chi_Minh
     volumes:
       - zk3-data:/data
       - zk3-log:/datalog
@@ -492,7 +492,7 @@ services:
         -Dspark.history.fs.cleaner.enabled=true
         -Dspark.history.fs.cleaner.interval=1d
         -Dspark.history.fs.cleaner.maxAge=7d
-      TZ: Asia/Ho_Chi_Minh
+#      TZ: Asia/Ho_Chi_Minh
     volumes:
       - spark-events:/opt/spark/spark-events:ro
     depends_on:

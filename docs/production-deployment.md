@@ -97,59 +97,25 @@ SPARK_METRICS_ENABLED=true
 
 ### Step 2: Update Docker Compose for Production
 
-Create `docker-compose.prod.yml` based on the current docker-compose.yml:
+Create `docker-compose.prod.yml` based on the main docker-compose.yml with production-specific enhancements:
 
 ```yaml
 version: '3.8'
 
 networks:
   spark-network:
-    driver: overlay
+    driver: overlay  # Use overlay for multi-host deployments
     attachable: true
 
 volumes:
+  # Use external volumes for production data persistence
   zk1-data:
-    driver: local
-    driver_opts:
-      type: nfs
-      o: addr=nfs-server,rw
-      device: ":/mnt/zk1-data"
   zk1-log:
-    driver: local
-    driver_opts:
-      type: nfs
-      o: addr=nfs-server,rw
-      device: ":/mnt/zk1-log"
   zk2-data:
-    driver: local
-    driver_opts:
-      type: nfs
-      o: addr=nfs-server,rw
-      device: ":/mnt/zk2-data"
   zk2-log:
-    driver: local
-    driver_opts:
-      type: nfs
-      o: addr=nfs-server,rw
-      device: ":/mnt/zk2-log"
   zk3-data:
-    driver: local
-    driver_opts:
-      type: nfs
-      o: addr=nfs-server,rw
-      device: ":/mnt/zk3-data"
   zk3-log:
-    driver: local
-    driver_opts:
-      type: nfs
-      o: addr=nfs-server,rw
-      device: ":/mnt/zk3-log"
   spark-events:
-    driver: local
-    driver_opts:
-      type: nfs
-      o: addr=nfs-server,rw
-      device: ":/mnt/spark-events"
 
 services:
   # ============================================
@@ -183,10 +149,11 @@ services:
       - zk1-log:/datalog
     restart: always
     healthcheck:
-      test: ["CMD", "zkServer.sh", "status"]
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok && echo stat | nc localhost 2181 | grep -q Mode"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 20s
     deploy:
       placement:
         constraints:
@@ -227,10 +194,11 @@ services:
       - zk2-log:/datalog
     restart: always
     healthcheck:
-      test: ["CMD", "zkServer.sh", "status"]
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok && echo stat | nc localhost 2181 | grep -q Mode"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 20s
     deploy:
       placement:
         constraints:
@@ -271,10 +239,11 @@ services:
       - zk3-log:/datalog
     restart: always
     healthcheck:
-      test: ["CMD", "zkServer.sh", "status"]
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok && echo stat | nc localhost 2181 | grep -q Mode"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 20s
     deploy:
       placement:
         constraints:
@@ -288,7 +257,7 @@ services:
           memory: 1G
 
   # ============================================
-  # Spark Master Nodes (HA)
+  # Spark Master Nodes (HA with ZooKeeper)
   # ============================================
   spark-master-1:
     image: ${SPARK_IMAGE}
@@ -301,44 +270,55 @@ services:
       - "8080:8080"
     environment:
       SPARK_MODE: master
-      SPARK_MASTER_HOST: spark-master-1.production.local
+      SPARK_NO_DAEMONIZE: true
+      SPARK_DAEMON_MEMORY: 1g
+      SPARK_PUBLIC_DNS: spark-master-1
+      SPARK_MASTER_HOST: spark-master-1
       SPARK_MASTER_PORT: ${SPARK_MASTER_PORT}
       SPARK_MASTER_WEBUI_PORT: ${SPARK_MASTER_WEBUI_PORT}
-      SPARK_DAEMON_JAVA_OPTS: |
+      SPARK_MASTER_OPTS: >-
         -Dspark.deploy.recoveryMode=${SPARK_RECOVERY_MODE}
         -Dspark.deploy.zookeeper.url=${SPARK_ZK_URL}
         -Dspark.deploy.zookeeper.dir=${SPARK_ZK_DIR}
         -Dspark.eventLog.enabled=${SPARK_EVENTLOG_ENABLED}
         -Dspark.eventLog.dir=${SPARK_EVENTLOG_DIR}
-        -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR}
-        -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED:-false}
+        -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED}
         -Dspark.authenticate.secret=${SPARK_RPC_AUTHENTICATION_SECRET}
-      SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY}
-      SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
-      SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
-      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+        -Dspark.network.crypto.enabled=${SPARK_RPC_ENCRYPTION_ENABLED}
+      SPARK_DAEMON_JAVA_OPTS: >-
+        -XX:+UseG1GC
+        -XX:+UnlockExperimentalVMOptions
+        -XX:MaxGCPauseMillis=200
+#      SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY}
+#      SPARK_DRIVER_EXTRA_CLASSPATH: ${SPARK_DRIVER_EXTRA_CLASSPATH}
+#      SPARK_EXECUTOR_EXTRA_CLASSPATH: ${SPARK_EXECUTOR_EXTRA_CLASSPATH}
+#      TZ: Asia/Ho_Chi_Minh
     volumes:
       - spark-events:/opt/spark/spark-events
-      - /path/to/spark/jars:/opt/spark/jars  # Use shared storage
-      - /path/to/spark/apps:/opt/spark/apps  # Use shared storage
+#      - ./spark/jars:/opt/spark/jars
+#      - ./apps:/opt/spark/apps
     depends_on:
-      - zookeeper-1
-      - zookeeper-2
-      - zookeeper-3
+      zookeeper-1:
+        condition: service_healthy
+      zookeeper-2:
+        condition: service_healthy
+      zookeeper-3:
+        condition: service_healthy
     command: >
       bash -c "
-        echo 'Waiting for ZooKeeper to be ready...';
-        sleep 10;
+        echo 'Waiting for ZooKeeper cluster to be ready...';
         mkdir -p /opt/spark/spark-events;
-        echo 'Starting Spark Master 1...';
+        echo 'Starting Spark Master 1 with HA...';
         /opt/spark/sbin/start-master.sh;
-        tail -f /opt/spark/logs/*"
-    restart: always
+        tail -f /opt/spark/logs/*
+      "
+    restart: always  # Changed from unless-stopped for production
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 3
+      start_period: 60s
     deploy:
       placement:
         constraints:
@@ -362,44 +342,55 @@ services:
       - "8081:8080"
     environment:
       SPARK_MODE: master
-      SPARK_MASTER_HOST: spark-master-2.production.local
+      SPARK_NO_DAEMONIZE: true
+      SPARK_DAEMON_MEMORY: 1G
+      SPARK_PUBLIC_DNS: spark-master-2
+      SPARK_MASTER_HOST: spark-master-2
       SPARK_MASTER_PORT: ${SPARK_MASTER_PORT}
       SPARK_MASTER_WEBUI_PORT: ${SPARK_MASTER_WEBUI_PORT}
-      SPARK_DAEMON_JAVA_OPTS: |
+      SPARK_MASTER_OPTS: >-
         -Dspark.deploy.recoveryMode=${SPARK_RECOVERY_MODE}
         -Dspark.deploy.zookeeper.url=${SPARK_ZK_URL}
         -Dspark.deploy.zookeeper.dir=${SPARK_ZK_DIR}
         -Dspark.eventLog.enabled=${SPARK_EVENTLOG_ENABLED}
         -Dspark.eventLog.dir=${SPARK_EVENTLOG_DIR}
-        -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR}
-        -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED:-false}
+        -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED}
         -Dspark.authenticate.secret=${SPARK_RPC_AUTHENTICATION_SECRET}
-      SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY}
-      SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
-      SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
-      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+        -Dspark.network.crypto.enabled=${SPARK_RPC_ENCRYPTION_ENABLED}
+      SPARK_DAEMON_JAVA_OPTS: >-
+        -XX:+UseG1GC
+        -XX:+UnlockExperimentalVMOptions
+        -XX:MaxGCPauseMillis=200
+#      SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY}
+#      SPARK_DRIVER_EXTRA_CLASSPATH: ${SPARK_DRIVER_EXTRA_CLASSPATH}
+#      SPARK_EXECUTOR_EXTRA_CLASSPATH: ${SPARK_EXECUTOR_EXTRA_CLASSPATH}
+#      TZ: Asia/Ho_Chi_Minh
     volumes:
       - spark-events:/opt/spark/spark-events
-      - /path/to/spark/jars:/opt/spark/jars  # Use shared storage
-      - /path/to/spark/apps:/opt/spark/apps  # Use shared storage
+#      - ./spark/jars:/opt/spark/jars
+#      - ./apps:/opt/spark/apps
     depends_on:
-      - zookeeper-1
-      - zookeeper-2
-      - zookeeper-3
+      zookeeper-1:
+        condition: service_healthy
+      zookeeper-2:
+        condition: service_healthy
+      zookeeper-3:
+        condition: service_healthy
     command: >
       bash -c "
-        echo 'Waiting for ZooKeeper to be ready...';
-        sleep 10;
+        echo 'Waiting for ZooKeeper cluster to be ready...';
         mkdir -p /opt/spark/spark-events;
-        echo 'Starting Spark Master 2...';
+        echo 'Starting Spark Master 2 with HA...';
         /opt/spark/sbin/start-master.sh;
-        tail -f /opt/spark/logs/*"
+        tail -f /opt/spark/logs/*
+      "
     restart: always
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 3
+      start_period: 60s
     deploy:
       placement:
         constraints:
@@ -423,44 +414,55 @@ services:
       - "8082:8080"
     environment:
       SPARK_MODE: master
-      SPARK_MASTER_HOST: spark-master-3.production.local
+      SPARK_NO_DAEMONIZE: true
+      SPARK_DAEMON_MEMORY: 1G
+      SPARK_PUBLIC_DNS: spark-master-3
+      SPARK_MASTER_HOST: spark-master-3
       SPARK_MASTER_PORT: ${SPARK_MASTER_PORT}
       SPARK_MASTER_WEBUI_PORT: ${SPARK_MASTER_WEBUI_PORT}
-      SPARK_DAEMON_JAVA_OPTS: |
+      SPARK_MASTER_OPTS: >-
         -Dspark.deploy.recoveryMode=${SPARK_RECOVERY_MODE}
         -Dspark.deploy.zookeeper.url=${SPARK_ZK_URL}
         -Dspark.deploy.zookeeper.dir=${SPARK_ZK_DIR}
         -Dspark.eventLog.enabled=${SPARK_EVENTLOG_ENABLED}
         -Dspark.eventLog.dir=${SPARK_EVENTLOG_DIR}
-        -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR}
-        -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED:-false}
+        -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED}
         -Dspark.authenticate.secret=${SPARK_RPC_AUTHENTICATION_SECRET}
-      SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY}
-      SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
-      SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
-      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+        -Dspark.network.crypto.enabled=${SPARK_RPC_ENCRYPTION_ENABLED}
+      SPARK_DAEMON_JAVA_OPTS: >-
+        -XX:+UseG1GC
+        -XX:+UnlockExperimentalVMOptions
+        -XX:MaxGCPauseMillis=200
+#      SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY}
+#      SPARK_DRIVER_EXTRA_CLASSPATH: ${SPARK_DRIVER_EXTRA_CLASSPATH}
+#      SPARK_EXECUTOR_EXTRA_CLASSPATH: ${SPARK_EXECUTOR_EXTRA_CLASSPATH}
+#      TZ: Asia/Ho_Chi_Minh
     volumes:
       - spark-events:/opt/spark/spark-events
-      - /path/to/spark/jars:/opt/spark/jars  # Use shared storage
-      - /path/to/spark/apps:/opt/spark/apps  # Use shared storage
+#      - ./spark/jars:/opt/spark/jars
+#      - ./apps:/opt/spark/apps
     depends_on:
-      - zookeeper-1
-      - zookeeper-2
-      - zookeeper-3
+      zookeeper-1:
+        condition: service_healthy
+      zookeeper-2:
+        condition: service_healthy
+      zookeeper-3:
+        condition: service_healthy
     command: >
       bash -c "
-        echo 'Waiting for ZooKeeper to be ready...';
-        sleep 10;
+        echo 'Waiting for ZooKeeper cluster to be ready...';
         mkdir -p /opt/spark/spark-events;
-        echo 'Starting Spark Master 3...';
+        echo 'Starting Spark Master 3 with HA...';
         /opt/spark/sbin/start-master.sh;
-        tail -f /opt/spark/logs/*"
+        tail -f /opt/spark/logs/*
+      "
     restart: always
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8082"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 3
+      start_period: 60s
     deploy:
       placement:
         constraints:
@@ -486,28 +488,50 @@ services:
       - "8083:8081"
     environment:
       SPARK_MODE: worker
-      SPARK_WORKER_HOST: spark-worker-1.production.local
+      SPARK_PUBLIC_DNS: spark-worker-1
+      SPARK_WORKER_HOST: spark-worker-1
+      SPARK_NO_DAEMONIZE: true
+      SPARK_DAEMON_MEMORY: 1G
       SPARK_MASTER_URL: ${SPARK_MASTER_URL}
       SPARK_WORKER_CORES: ${SPARK_WORKER_CORES}
       SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY}
       SPARK_WORKER_WEBUI_PORT: ${SPARK_WORKER_WEBUI_PORT}
-      SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
-      SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
-      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+      SPARK_LOCAL_DIRS: ${SPARK_LOCAL_DIRS}
+      SPARK_WORKER_OPTS: >-
+        -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED}
+        -Dspark.authenticate.secret=${SPARK_RPC_AUTHENTICATION_SECRET}
+        -Dspark.network.crypto.enabled=${SPARK_RPC_ENCRYPTION_ENABLED}
+      SPARK_DAEMON_JAVA_OPTS: >-
+        -XX:+UseG1GC
+        -XX:+UnlockExperimentalVMOptions
+        -XX:MaxGCPauseMillis=200
+#      SPARK_DRIVER_EXTRA_CLASSPATH: ${SPARK_DRIVER_EXTRA_CLASSPATH}
+#      SPARK_EXECUTOR_EXTRA_CLASSPATH: ${SPARK_EXECUTOR_EXTRA_CLASSPATH}
+#      TZ: Asia/Ho_Chi_Minh
     volumes:
-      - /path/to/spark/jars:/opt/spark/jars  # Use shared storage
+      - ./spark/worker-1-data:/opt/spark/work-dir
+#      - ./spark/jars:/opt/spark/jars
     depends_on:
-      - spark-master-1
-      - spark-master-2
-      - spark-master-3
+      spark-master-1:
+        condition: service_healthy
+      spark-master-2:
+        condition: service_healthy
+      spark-master-3:
+        condition: service_healthy
     command: >
       bash -c "
-        echo 'Waiting for Spark Masters...';
-        sleep 15;
+        echo 'Waiting for Spark Masters HA to be ready...';
         echo 'Starting Spark Worker 1...';
         /opt/spark/sbin/start-worker.sh ${SPARK_MASTER_URL};
-        tail -f /opt/spark/logs/*"
+        tail -f /opt/spark/logs/*
+      "
     restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
     deploy:
       placement:
         constraints:
@@ -530,32 +554,120 @@ services:
       - "8084:8081"
     environment:
       SPARK_MODE: worker
-      SPARK_WORKER_HOST: spark-worker-2.production.local
+      SPARK_PUBLIC_DNS: spark-worker-2
+      SPARK_WORKER_HOST: spark-worker-2
+      SPARK_NO_DAEMONIZE: true
+      SPARK_DAEMON_MEMORY: 1G
       SPARK_MASTER_URL: ${SPARK_MASTER_URL}
       SPARK_WORKER_CORES: ${SPARK_WORKER_CORES}
       SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY}
       SPARK_WORKER_WEBUI_PORT: ${SPARK_WORKER_WEBUI_PORT}
-      SPARK_DRIVER_EXTRA_CLASSPATH: /opt/spark/jars/*
-      SPARK_EXECUTOR_EXTRA_CLASSPATH: /opt/spark/jars/*
-      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+      SPARK_LOCAL_DIRS: ${SPARK_LOCAL_DIRS}
+      SPARK_WORKER_OPTS: >-
+        -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED}
+        -Dspark.authenticate.secret=${SPARK_RPC_AUTHENTICATION_SECRET}
+        -Dspark.network.crypto.enabled=${SPARK_RPC_ENCRYPTION_ENABLED}
+      SPARK_DAEMON_JAVA_OPTS: >-
+        -XX:+UseG1GC
+        -XX:+UnlockExperimentalVMOptions
+        -XX:MaxGCPauseMillis=200
+#      SPARK_DRIVER_EXTRA_CLASSPATH: ${SPARK_DRIVER_EXTRA_CLASSPATH}
+#      SPARK_EXECUTOR_EXTRA_CLASSPATH: ${SPARK_EXECUTOR_EXTRA_CLASSPATH}
+#      TZ: Asia/Ho_Chi_Minh
     volumes:
-      - /path/to/spark/jars:/opt/spark/jars  # Use shared storage
+      - ./spark/worker-2-data:/opt/spark/work-dir
+#      - ./spark/jars:/opt/spark/jars
     depends_on:
-      - spark-master-1
-      - spark-master-2
-      - spark-master-3
+      spark-master-1:
+        condition: service_healthy
+      spark-master-2:
+        condition: service_healthy
+      spark-master-3:
+        condition: service_healthy
     command: >
       bash -c "
-        echo 'Waiting for Spark Masters...';
-        sleep 15;
+        echo 'Waiting for Spark Masters HA to be ready...';
         echo 'Starting Spark Worker 2...';
         /opt/spark/sbin/start-worker.sh ${SPARK_MASTER_URL};
-        tail -f /opt/spark/logs/*"
+        tail -f /opt/spark/logs/*
+      "
     restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
     deploy:
       placement:
         constraints:
           - node.hostname == worker2
+      resources:
+        limits:
+          cpus: '16'
+          memory: 64G
+        reservations:
+          cpus: '8'
+          memory: 32G
+
+  spark-worker-3:
+    image: ${SPARK_IMAGE}
+    container_name: spark-worker-3
+    hostname: spark-worker-3.production.local
+    networks:
+      - spark-network
+    ports:
+      - "8085:8081"
+    environment:
+      SPARK_MODE: worker
+      SPARK_PUBLIC_DNS: spark-worker-3
+      SPARK_WORKER_HOST: spark-worker-3
+      SPARK_NO_DAEMONIZE: true
+      SPARK_DAEMON_MEMORY: 1G
+      SPARK_MASTER_URL: ${SPARK_MASTER_URL}
+      SPARK_WORKER_CORES: ${SPARK_WORKER_CORES}
+      SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY}
+      SPARK_WORKER_WEBUI_PORT: ${SPARK_WORKER_WEBUI_PORT}
+      SPARK_LOCAL_DIRS: ${SPARK_LOCAL_DIRS}
+      SPARK_WORKER_OPTS: >-
+        -Dspark.authenticate=${SPARK_RPC_AUTHENTICATION_ENABLED}
+        -Dspark.authenticate.secret=${SPARK_RPC_AUTHENTICATION_SECRET}
+        -Dspark.network.crypto.enabled=${SPARK_RPC_ENCRYPTION_ENABLED}
+      SPARK_DAEMON_JAVA_OPTS: >-
+        -XX:+UseG1GC
+        -XX:+UnlockExperimentalVMOptions
+        -XX:MaxGCPauseMillis=200
+#      SPARK_DRIVER_EXTRA_CLASSPATH: ${SPARK_DRIVER_EXTRA_CLASSPATH}
+#      SPARK_EXECUTOR_EXTRA_CLASSPATH: ${SPARK_EXECUTOR_EXTRA_CLASSPATH}
+#      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - ./spark/worker-3-data:/opt/spark/work-dir
+#      - ./spark/jars:/opt/spark/jars
+    depends_on:
+      spark-master-1:
+        condition: service_healthy
+      spark-master-2:
+        condition: service_healthy
+      spark-master-3:
+        condition: service_healthy
+    command: >
+      bash -c "
+        echo 'Waiting for Spark Masters HA to be ready...';
+        echo 'Starting Spark Worker 3...';
+        /opt/spark/sbin/start-worker.sh ${SPARK_MASTER_URL};
+        tail -f /opt/spark/logs/*
+      "
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == worker3  # Added missing worker3
       resources:
         limits:
           cpus: '16'
@@ -576,27 +688,41 @@ services:
     ports:
       - "18080:18080"
     environment:
-      SPARK_NO_DAEMONIZE: "true"
-      SPARK_HISTORY_OPTS: |
+      SPARK_NO_DAEMONIZE: true
+      SPARK_PUBLIC_DNS: spark-history
+      SPARK_HISTORY_OPTS: >-
         -Dspark.history.fs.logDirectory=${SPARK_HISTORY_LOG_DIR}
         -Dspark.history.retainedApplications=${SPARK_HISTORY_RETAINED_APP}
         -Dspark.history.ui.port=${SPARK_HISTORY_UI_PORT}
+        -Dspark.history.fs.update.interval=10s
+        -Dspark.history.fs.cleaner.enabled=true
+        -Dspark.history.fs.cleaner.interval=1d
+        -Dspark.history.fs.cleaner.maxAge=7d
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
     volumes:
       - spark-events:/opt/spark/spark-events:ro
     depends_on:
-      - spark-master-1
-      - spark-master-2
-      - spark-master-3
+      spark-master-1:
+        condition: service_healthy
+      spark-master-2:
+        condition: service_healthy
+      spark-master-3:
+        condition: service_healthy
     command: >
       bash -c "
-        echo 'Waiting for Spark cluster to generate event logs...';
-        sleep 20;
+        echo 'Waiting for event logs...';
         mkdir -p /opt/spark/spark-events;
         echo 'Starting Spark History Server...';
         /opt/spark/sbin/start-history-server.sh;
-        tail -f /opt/spark/logs/*"
+        tail -f /opt/spark/logs/*
+      "
     restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:18080"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
     deploy:
       placement:
         constraints:
