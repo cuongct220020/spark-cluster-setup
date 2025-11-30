@@ -39,7 +39,7 @@ cd spark-cluster-setup
 make configure
 
 # Copy environment file
-cp .env.example .env
+cp .env.example.prod .env
 # Edit .env to customize configuration if needed
 ```
 
@@ -48,7 +48,7 @@ Before starting the cluster, you need to set up security credentials. The `.env`
 
 ```bash
 # Copy the example environment file
-cp .env.example .env
+cp .env.example.prod .env
 
 # Generate a new random secret for Spark RPC authentication
 # Run this command and copy the output to replace SPARK_RPC_AUTHENTICATION_SECRET in your .env file

@@ -1007,7 +1007,7 @@ DATE=$(date +%Y%m%d_%H%M%S)
 
 # Backup docker-compose and env files
 tar czf $BACKUP_DIR/spark-config-$DATE.tar.gz \
-  docker-compose.yml \
+  docker-compose.prod.yml \
   .env \
   *.sh
 
